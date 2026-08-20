@@ -209,10 +209,12 @@
   }
   
   button.danger, .bulk-btn.danger {
-      background-color: var(--danger-color);
+      background-color: var(--background-color);
+      color: var(--danger-color);
+      border: 1px solid var(--danger-color);
   }
   button.danger:hover, .bulk-btn.danger:hover {
-      background-color: var(--danger-hover);
+      background-color: color-mix(in srgb, var(--danger-color) 10%, var(--background-color));
   }
   button.secondary, .bulk-btn {
     background-color: var(--secondary-color);
