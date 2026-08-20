@@ -4,9 +4,11 @@
   "version": "1.0.0",
   "scripts": {
     "test": "playwright test",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "build:app": "node scripts/build-nativefier-app.js \"file://$(pwd)/index.html\" build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.48.0",
+    "@electron/packager": "^20.3.0"
   }
 }

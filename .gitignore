@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Nativefier build output
+build/
+
 # Playwright
 test-results/
 playwright-report/
