@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Enhanced To-Do List</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="./style.css" />
     <!-- Libraries loaded from CDN - No NPM needed! -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -129,8 +132,8 @@
 
         <!-- Data Transfer -->
         <div class="data-transfer">
-            <button @click="handleExport" class="action-btn">
-              <i data-feather="download" class="icon-s"></i> Export JSON
+            <button @click="handleExport" class="action-btn action-btn-quiet" title="Export JSON">
+              <i data-feather="download" class="icon-xs"></i><span>Export</span>
             </button>
             <input
               type="file"
@@ -139,8 +142,8 @@
               accept="application/json"
               @change="handleImport"
             />
-            <button @click="triggerImport" class="action-btn">
-              <i data-feather="upload" class="icon-s"></i> Import JSON
+            <button @click="triggerImport" class="action-btn action-btn-quiet" title="Import JSON">
+              <i data-feather="upload" class="icon-xs"></i><span>Import</span>
             </button>
             <button
               v-if="showAutoSaveFooterButton"
@@ -194,18 +197,18 @@
             <div class="bulk-edit-controls" v-if="tasks.length > 0">
                 <template v-if="!isSelecting">
                     <button @click="isSelecting = true" class="bulk-btn" type="button">
-                        <i data-feather="edit" class="icon-s"></i> Select
+                        <i data-feather="edit" class="icon-s"></i><span>Select</span>
                     </button>
                     <button @click="handleClearCompleted" class="bulk-btn danger" type="button">
-                        <i data-feather="trash-2" class="icon-s"></i> Clear completed
+                        <i data-feather="trash-2" class="icon-s"></i><span>Clear completed</span>
                     </button>
                 </template>
                 <template v-else>
                     <button @click="deleteSelected" class="bulk-btn danger" type="button" :disabled="selectedIds.size === 0">
-                        <i data-feather="trash-2" class="icon-s"></i> Delete Selected ({{ selectedIds.size }})
+                        <i data-feather="trash-2" class="icon-s"></i><span>Delete Selected ({{ selectedIds.size }})</span>
                     </button>
                     <button @click="cancelSelecting" class="bulk-btn" type="button">
-                        <i data-feather="x" class="icon-s"></i> Cancel
+                        <i data-feather="x" class="icon-s"></i><span>Cancel</span>
                     </button>
                 </template>
             </div>
@@ -290,6 +293,7 @@
             </div>
 
             <div class="task-details-container">
+              <div class="task-details-inner">
                 <!-- Due date + Tags: a single compact pill row instead of two full-width
                      rows, so tasks with many subtasks don't scroll past a wall of empty
                      "Add tag..."/"dd.mm.yyyy" chrome before reaching the actual content. -->
@@ -343,6 +347,7 @@
 
                 <!-- Subtask List -->
                 <subtask-list :task="task" @update-subtasks="handleSubtasksUpdate"></subtask-list>
+              </div>
             </div>
         </li>
     </script>

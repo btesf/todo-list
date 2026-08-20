@@ -10,7 +10,7 @@ test('exports tasks as a JSON file', async ({ page }) => {
   await addTask(page, 'Exportable task');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export JSON' }).click(),
+    page.getByRole('button', { name: 'Export', exact: true }).click(),
   ]);
 
   expect(download.suggestedFilename()).toBe('tasks.json');

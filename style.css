@@ -1,30 +1,45 @@
 /* --- Global Styles & Resets --- */
 :root {
-    --primary-color: #6366f1;
-    --primary-hover: #4f46e5;
-    --secondary-color: #64748b;
-    --secondary-hover: #475569;
-    --danger-color: #ef4444;
-    --danger-hover: #dc2626;
-    --success-color: #22c55e;
-    --warning-color: #f59e0b; /* For important star */
-    --light-gray: #f8fafc;
-    --medium-gray: #f1f5f9;
-    --dark-gray: #94a3b8; /* Slightly darker gray */
-    --text-color: #1e293b; /* Darker text */
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
-    --background-color: #fff;
-    --important-border: #f59e0b; /* Amber for important */
-    --font-size-base: 0.875rem; /* 14px */
-    --font-size-sm: 0.75rem;   /* 12px */
-    --font-size-lg: 1.1rem;
+    /* Colors defined in OKLCH (perceptually uniform: consistent lightness/chroma
+       steps across hues, so hover/active variants and dark-mode swaps stay
+       visually predictable instead of drifting via raw hex math). Values are
+       exact conversions of the previous hex palette, so the look is unchanged. */
+    --primary-color: oklch(58.5% 0.204 277.1);
+    --primary-hover: oklch(51.1% 0.230 277.0);
+    --secondary-color: oklch(55.4% 0.041 257.4);
+    --secondary-hover: oklch(44.6% 0.037 257.3);
+    --danger-color: oklch(63.7% 0.208 25.3);
+    --danger-hover: oklch(57.7% 0.215 27.3);
+    --success-color: oklch(72.3% 0.192 149.6);
+    --warning-color: oklch(76.9% 0.165 70.1); /* For important star */
+    --light-gray: oklch(98.4% 0.003 247.9);
+    --medium-gray: oklch(96.8% 0.007 247.9);
+    --dark-gray: oklch(71.1% 0.035 256.8); /* Slightly darker gray */
+    --text-color: oklch(27.9% 0.037 260.0); /* Darker text */
+    --text-muted: oklch(55.4% 0.041 257.4);
+    --border-color: oklch(92.9% 0.013 255.5);
+    --background-color: oklch(100% 0 0);
+    --important-border: oklch(76.9% 0.165 70.1); /* Amber for important */
+
+    /* Fluid type scale: interpolates between a small-viewport floor and a
+       larger-viewport ceiling instead of one fixed size for every width. */
+    --font-size-base: clamp(0.85rem, 0.82rem + 0.15vw, 0.9375rem); /* ~13.6-15px */
+    --font-size-sm: clamp(0.7rem, 0.675rem + 0.1vw, 0.8125rem);    /* ~11.2-13px */
+    --font-size-lg: clamp(1rem, 0.95rem + 0.25vw, 1.15rem);        /* ~16-18.4px */
+
     --spacing-xs: 0.25rem; /* 4px */
     --spacing-sm: 0.5rem;  /* 8px */
     --spacing-md: 0.75rem; /* 12px */
     --spacing-lg: 1rem;   /* 16px */
     --border-radius: 0.5rem;
     --transition-speed: 0.2s;
+
+    /* Elevation system: layered shadows (a tight contact shadow + a soft, wide
+       ambient one) read as more natural depth than a single flat box-shadow. */
+    --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.04), 0 1px 1px oklch(0% 0 0 / 0.03);
+    --shadow-md: 0 1px 2px oklch(0% 0 0 / 0.05), 0 6px 16px oklch(0% 0 0 / 0.07);
+    --shadow-lg: 0 2px 4px oklch(0% 0 0 / 0.05), 0 16px 32px oklch(0% 0 0 / 0.12);
+    --focus-ring: 0 0 0 3px color-mix(in oklch, var(--primary-color) 35%, transparent);
   }
   
   *,
@@ -36,7 +51,7 @@
   }
   
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
       Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
     line-height: 1.5;
     background-color: var(--light-gray);
@@ -49,9 +64,9 @@
     max-width: 700px;
     margin: 2rem auto;
     background-color: var(--background-color);
-    padding: var(--spacing-lg) var(--spacing-lg);
+    padding: calc(var(--spacing-lg) * 1.5);
     border-radius: var(--border-radius);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Softer shadow */
+    box-shadow: var(--shadow-lg);
   }
   
   h1,
@@ -63,7 +78,7 @@
   }
   
   h1 {
-    font-size: 1.5rem;
+    font-size: clamp(1.25rem, 1.1rem + 1vw, 1.5rem);
     text-align: center;
     margin-bottom: 0;
   }
@@ -72,8 +87,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    margin-bottom: var(--spacing-lg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin: calc(-1 * var(--spacing-sm)) 0 var(--spacing-lg);
+    padding: var(--spacing-sm) 0;
+    background-color: color-mix(in oklch, var(--background-color) 82%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .theme-toggle-btn {
@@ -160,19 +182,26 @@
   input:focus, textarea:focus {
       outline: none;
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 25%, transparent);
+      box-shadow: var(--focus-ring);
   }
-  
+
   input::placeholder,
   textarea::placeholder {
      color: var(--text-muted);
      opacity: 0.7;
   }
 
-  /* --- Focus Visible (keyboard navigation) --- */
+  /* --- Focus Visible (keyboard navigation) ---
+     Same ring token as text inputs above, for one consistent focus treatment
+     across the whole app. Text links keep an outline instead: box-shadow rings
+     don't follow inline-wrapped text the way an outline does. */
   button:focus-visible,
-  a:focus-visible,
   input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--border-radius);
+  }
+  a:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
     border-radius: var(--border-radius);
@@ -217,10 +246,14 @@
       background-color: color-mix(in srgb, var(--danger-color) 10%, var(--background-color));
   }
   button.secondary, .bulk-btn {
-    background-color: var(--secondary-color);
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
   }
   button.secondary:hover, .bulk-btn:hover {
-    background-color: var(--secondary-hover);
+    background-color: var(--medium-gray);
+    color: var(--text-color);
+    border-color: var(--dark-gray);
   }
   
   /* --- Icons --- */
@@ -239,15 +272,21 @@
   input[type="text"] { flex-grow: 1; }
   
   /* --- Task Sections --- */
-  .task-section { margin-bottom: var(--spacing-lg); }
-  
+  .task-section { margin-bottom: calc(var(--spacing-lg) * 1.5); }
+
   .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: var(--spacing-sm);
-      margin-bottom: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+  }
+
+  /* Pill-shaped section label, standing in for the old full-width divider rule. */
+  .section-header h2 {
+      padding: var(--spacing-xs) var(--spacing-md);
+      background-color: var(--medium-gray);
+      border-radius: 999px;
+      font-weight: 600;
   }
   
   .bulk-edit-controls { display: flex; gap: var(--spacing-sm); justify-content: flex-end; margin-bottom: var(--spacing-sm); }
@@ -261,18 +300,20 @@
     background-color: var(--background-color);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
     padding: var(--spacing-sm);
     display: flex;
     flex-direction: column;
     position: relative;
-    transition: background-color var(--transition-speed) ease, border-color var(--transition-speed) ease, opacity var(--transition-speed) ease;
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-speed) ease, border-color var(--transition-speed) ease, opacity var(--transition-speed) ease, box-shadow var(--transition-speed) ease, transform var(--transition-speed) ease;
     overflow: visible;
   }
-  
+
   .task-list li.task-item:hover {
     border-color: var(--secondary-color);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
   }
   
   .task-list li.task-item.important {
@@ -329,27 +370,37 @@
   .drag-handle:hover { color: var(--text-color); }
   .drag-handle-hidden { visibility: hidden; cursor: default; color: var(--dark-gray); padding: 0 var(--spacing-xs); display: flex; align-items: center; }
   
-  /* --- Description & Subtask Area --- */
+  /* --- Description & Subtask Area ---
+     Animated via a CSS Grid row (0fr -> 1fr) rather than max-height: 0 -> some
+     large fixed value. A fixed max-height ceiling (e.g. 2000px) has to be much
+     bigger than the real content, so easing plays out over that whole fake
+     range - visually the content appears almost instantly, then the rest of
+     the transition duration does nothing, reading as a jump-then-pause instead
+     of one smooth motion. grid-template-rows animates against the content's
+     own intrinsic height, so it stays smooth at any content size. */
   .task-details-container {
-    padding: 0;
+    display: grid;
+    grid-template-rows: 0fr;
     padding-left: calc(1rem + var(--spacing-sm) + 16px);
     padding-right: var(--spacing-sm);
-    max-height: 0;
     opacity: 0;
-    overflow: hidden;
     margin-top: 0;
     visibility: hidden;
-    transition: max-height 0.3s ease-out, opacity 0.25s ease-in-out, margin-top 0.3s ease-out, visibility 0s linear 0.3s;
+    transition: grid-template-rows 0.3s ease, opacity 0.25s ease-in-out, margin-top 0.3s ease, visibility 0s linear 0.3s;
+  }
+  .task-details-inner {
+    overflow: hidden;
+    min-height: 0;
   }
   /* visibility flips to hidden only after the collapse animation finishes (matching
      the transition above), so content isn't yanked away mid-shrink, but also isn't
      left focusable/tabbable while visually clipped once collapsed. */
   .task-item.show-details .task-details-container {
-      max-height: 2000px;
+      grid-template-rows: 1fr;
       opacity: 1;
       margin-top: var(--spacing-sm);
       visibility: visible;
-      transition: max-height 0.3s ease-out, opacity 0.25s ease-in-out, margin-top 0.3s ease-out;
+      transition: grid-template-rows 0.3s ease, opacity 0.25s ease-in-out, margin-top 0.3s ease;
   }
 
   .task-description-display, .task-description-editor { margin-top: var(--spacing-sm); line-height: 1.4; }
@@ -403,6 +454,7 @@
   }
   button.meta-pill:hover { background-color: var(--border-color); }
   .meta-pill.overdue { color: white; background-color: var(--danger-color); }
+  button.meta-pill.overdue:hover { background-color: var(--danger-hover); }
   .meta-pill-ghost {
     background-color: transparent;
     border: 1px dashed var(--border-color);
@@ -417,7 +469,7 @@
     align-items: center;
     padding: 2px;
   }
-  .meta-pill-clear:hover { color: var(--danger-color); }
+  .meta-pill-clear:hover { color: var(--danger-color); background-color: transparent; }
   .meta-date-editor { display: inline-flex; align-items: center; gap: var(--spacing-xs); }
   .meta-date-input, .meta-time-input { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); height: auto; }
 
@@ -480,7 +532,15 @@
   .tag-chip.tag-chip-compact {
     padding: 2px 6px;
   }
-  .tag-chip-label:hover { text-decoration: underline; }
+  /* Unlike the meta-row's tag-chip (a plain span wrapping a transparent
+     button), this compact variant puts .tag-chip's own gray background
+     directly on the <button> - so it needs its own :hover rule, or the
+     generic button:hover indigo fill wins on specificity and buries the text. */
+  button.tag-chip.tag-chip-compact:hover {
+    background-color: var(--border-color);
+    text-decoration: underline;
+  }
+  .tag-chip-label:hover { text-decoration: underline; background-color: transparent; }
   .tag-chip-remove {
     background: none;
     border: none;
@@ -490,7 +550,7 @@
     cursor: pointer;
     padding: 2px 4px 2px 0;
   }
-  .tag-chip-remove:hover { color: var(--danger-color); }
+  .tag-chip-remove:hover { color: var(--danger-color); background-color: transparent; }
   .tag-input {
     width: 8rem;
     flex: 0 0 auto;
@@ -515,7 +575,7 @@
 
   .delete-subtask-btn { background: none; border: none; color: var(--dark-gray); padding: 2px; display: flex; cursor: pointer; opacity: 0; transition: opacity 0.2s, color 0.2s; margin-left: auto; }
   .subtask-item:hover .delete-subtask-btn { opacity: 1; }
-  .delete-subtask-btn:hover { color: var(--danger-color); }
+  .delete-subtask-btn:hover { color: var(--danger-color); background-color: transparent; }
   #add-subtask-form { display: flex; gap: var(--spacing-xs); }
   #add-subtask-form input { flex-grow: 1; font-size: var(--font-size-sm); padding: var(--spacing-xs); height: auto; }
   #add-subtask-form button { padding: var(--spacing-xs); font-size: var(--font-size-sm); flex-shrink: 0; }
@@ -559,7 +619,7 @@
   .placeholder { font-style: italic; color: var(--text-muted); text-align: center; padding: var(--spacing-md); margin-top: var(--spacing-sm); }
   
   /* --- Data Transfer Buttons --- */
-  .data-transfer { margin-top: var(--spacing-lg); display: flex; gap: var(--spacing-md); justify-content: center; border-top: 1px solid var(--border-color); padding-top: var(--spacing-lg); }
+  .data-transfer { margin-top: var(--spacing-lg); display: flex; gap: var(--spacing-sm); justify-content: center; border-top: 1px solid var(--border-color); padding-top: var(--spacing-md); }
   /* Ghost/outline style: these are secondary, settings-like actions - "Add Task"
      stays the one filled/primary button on the page. */
   .action-btn {
@@ -571,6 +631,18 @@
     background-color: var(--medium-gray);
     color: var(--text-color);
     border-color: var(--dark-gray);
+  }
+  /* Export/Import are rarely used, so they shouldn't compete visually with
+     everyday actions - smaller, borderless until hover, shorter labels
+     (full "Export JSON"/"Import JSON" still available via the title tooltip). */
+  .action-btn.action-btn-quiet {
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-color: transparent;
+  }
+  .action-btn.action-btn-quiet:hover {
+    background-color: var(--medium-gray);
+    border-color: transparent;
   }
   .action-btn.auto-save-connected {
     color: var(--success-color);
@@ -592,7 +664,7 @@
   .dragging-fallback {
     opacity: 0.95 !important;
     background: var(--background-color) !important;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-lg);
     border-radius: var(--border-radius);
     cursor: grabbing !important;
   }
@@ -607,7 +679,7 @@
     color: var(--background-color);
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--border-radius);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-lg);
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
@@ -623,7 +695,7 @@
     font-weight: 600;
     flex-shrink: 0;
   }
-  .toast-action:hover { color: #c7d2fe; }
+  .toast-action:hover { color: #c7d2fe; background-color: transparent; }
   .toast-close {
     background: none;
     color: var(--background-color);
@@ -651,23 +723,33 @@
     .date-header-container { padding-left: var(--spacing-xs); padding-right: var(--spacing-xs);}
   }
 
+  /* --- Reduced Motion --- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* --- Dark Mode --- */
   [data-theme="dark"] {
     color-scheme: dark;
-    --primary-color: #818cf8;
-    --primary-hover: #a5b4fc;
-    --secondary-color: #94a3b8;
-    --secondary-hover: #cbd5e1;
-    --danger-color: #f87171;
-    --danger-hover: #fca5a5;
-    --success-color: #4ade80;
-    --warning-color: #fbbf24;
-    --light-gray: #21262d;
-    --medium-gray: #30363d;
-    --dark-gray: #6e7681;
-    --text-color: #e6edf3;
-    --text-muted: #9198a1;
-    --border-color: #30363d;
-    --background-color: #0d1117;
-    --important-border: #fbbf24;
+    --primary-color: oklch(68.0% 0.158 276.9);
+    --primary-hover: oklch(78.5% 0.104 274.7);
+    --secondary-color: oklch(71.1% 0.035 256.8);
+    --secondary-hover: oklch(86.9% 0.020 252.9);
+    --danger-color: oklch(71.1% 0.166 22.2);
+    --danger-hover: oklch(80.8% 0.103 19.6);
+    --success-color: oklch(80.0% 0.182 151.7);
+    --warning-color: oklch(83.7% 0.164 84.4);
+    --light-gray: oklch(26.7% 0.015 256.8);
+    --medium-gray: oklch(33.0% 0.015 252.3);
+    --dark-gray: oklch(56.3% 0.020 256.3);
+    --text-color: oklch(94.3% 0.011 243.7);
+    --text-muted: oklch(67.7% 0.016 254.6);
+    --border-color: oklch(33.0% 0.015 252.3);
+    --background-color: oklch(17.6% 0.014 258.4);
+    --important-border: oklch(83.7% 0.164 84.4);
   }
