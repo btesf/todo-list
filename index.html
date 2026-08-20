@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enhanced To-Do List</title>
+    <link rel="stylesheet" href="./style.css" />
+    <!-- Libraries loaded from CDN - No NPM needed! -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+</head>
+<body>
+    <!-- The main div where our Vue app will be mounted -->
+    <div id="app" class="app-container">
+        <div class="app-header">
+            <h1>My Tasks</h1>
+            <button @click="toggleTheme" class="theme-toggle-btn" type="button" :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
+                <svg v-if="theme === 'dark'" class="icon-m" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <svg v-else class="icon-m" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Auto-save nudge (shown once, until connected or dismissed) -->
+        <div v-if="showAutoSaveBanner" class="auto-save-banner">
+            <span>
+                <i data-feather="save" class="icon-s"></i>
+                Back up your tasks automatically to a local file, so nothing is lost if the app or your computer crashes.
+            </span>
+            <div class="auto-save-banner-actions">
+                <button @click="handleAutoSaveClick" type="button" class="action-btn">Enable auto-save</button>
+                <button @click="dismissAutoSaveBanner" type="button" class="task-action-btn" aria-label="Dismiss">
+                    <i data-feather="x" class="icon-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search / Filter -->
+        <div class="search-box">
+            <input type="text" v-model="searchQuery" placeholder="Search tasks..." aria-label="Search tasks" />
+        </div>
+
+        <!-- Add Task Form -->
+        <form @submit.prevent="addTask">
+            <input type="text" v-model="newTaskText" placeholder="Add a new task..." required aria-label="New task text" autofocus />
+            <button type="submit">
+                <i data-feather="plus" class="icon-s"></i> Add Task
+            </button>
+        </form>
+
+        <!-- Pending Tasks Section -->
+        <div class="task-section">
+            <div class="section-header">
+                <h2>
+                    <i data-feather="list" class="icon-m"></i>
+                    Pending (<span>{{ pendingTasks.length }}</span>)
+                </h2>
+            </div>
+            <task-list
+                :tasks="pendingTasks"
+                :empty-message="pendingEmptyMessage"
+                :expanded-task-ids="expandedTaskIds"
+                @update-task="updateTask"
+                @delete-task="deleteTask"
+                @order-update="onOrderUpdate"
+                @filter-by-tag="handleFilterByTag"
+                @set-task-expanded="setTaskExpanded">
+            </task-list>
+        </div>
+
+        <!-- Completed Tasks Section -->
+        <div class="task-section">
+            <div class="section-header">
+                <h2>
+                    <i data-feather="check-circle" class="icon-m"></i> Completed
+                </h2>
+            </div>
+            <completed-tasks
+                :tasks="completedTasks"
+                :empty-message="completedEmptyMessage"
+                :expanded-task-ids="expandedTaskIds"
+                @update-task="updateTask"
+                @delete-task="deleteTask"
+                @delete-many="deleteMany"
+                @clear-completed="clearCompleted"
+                @filter-by-tag="handleFilterByTag"
+                @set-task-expanded="setTaskExpanded">
+            </completed-tasks>
+        </div>
+
+        <!-- Data Transfer -->
+        <div class="data-transfer">
+            <button @click="handleExport" class="action-btn">
+              <i data-feather="download" class="icon-s"></i> Export JSON
+            </button>
+            <input
+              type="file"
+              id="import-input"
+              style="display: none"
+              accept="application/json"
+              @change="handleImport"
+            />
+            <button @click="triggerImport" class="action-btn">
+              <i data-feather="upload" class="icon-s"></i> Import JSON
+            </button>
+            <button
+              v-if="showAutoSaveFooterButton"
+              @click="handleAutoSaveClick"
+              class="action-btn"
+              :class="{ 'auto-save-connected': autoSaveState === 'connected', 'auto-save-reconnect': autoSaveState === 'reconnect-needed' }"
+              :title="autoSaveState === 'connected' ? 'Auto-save is on — click to disable' : autoSaveState === 'reconnect-needed' ? 'Auto-save needs permission again' : 'Save changes automatically to a local file'"
+            >
+              <i data-feather="save" class="icon-s"></i> {{ autoSaveLabel }}
+            </button>
+        </div>
+
+        <!-- Toast -->
+        <div v-if="toast" class="toast" :class="'toast-' + toast.variant" role="status" aria-live="polite">
+            <span class="toast-message">{{ toast.message }}</span>
+            <button v-if="toast.actionLabel" @click="handleToastAction" class="toast-action" type="button">{{ toast.actionLabel }}</button>
+            <button @click="dismissToast" class="toast-close" type="button" aria-label="Dismiss">
+                <i data-feather="x" class="icon-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!--
+    =================================
+    COMPONENT TEMPLATES
+    =================================
+    -->
+
+    <!-- TaskList Template -->
+    <script type="text/x-template" id="task-list-template">
+        <ul ref="listRef" class="task-list">
+            <task-item
+                v-for="task in tasks"
+                :key="task.id"
+                :task="task"
+                :expanded="expandedTaskIds.has(task.id)"
+                @update-task="emit('update-task', $event)"
+                @delete-task="emit('delete-task', $event)"
+                @filter-by-tag="emit('filter-by-tag', $event)"
+                @set-task-expanded="emit('set-task-expanded', $event)">
+            </task-item>
+            <li v-if="tasks.length === 0" class="placeholder">
+                {{ emptyMessage }}
+            </li>
+        </ul>
+    </script>
+
+    <!-- CompletedTasks Template -->
+    <script type="text/x-template" id="completed-tasks-template">
+        <div id="completed-container">
+            <div class="bulk-edit-controls" v-if="tasks.length > 0">
+                <template v-if="!isSelecting">
+                    <button @click="isSelecting = true" class="bulk-btn" type="button">
+                        <i data-feather="edit" class="icon-s"></i> Select
+                    </button>
+                    <button @click="handleClearCompleted" class="bulk-btn danger" type="button">
+                        <i data-feather="trash-2" class="icon-s"></i> Clear completed
+                    </button>
+                </template>
+                <template v-else>
+                    <button @click="deleteSelected" class="bulk-btn danger" type="button" :disabled="selectedIds.size === 0">
+                        <i data-feather="trash-2" class="icon-s"></i> Delete Selected ({{ selectedIds.size }})
+                    </button>
+                    <button @click="cancelSelecting" class="bulk-btn" type="button">
+                        <i data-feather="x" class="icon-s"></i> Cancel
+                    </button>
+                </template>
+            </div>
+            <div v-if="tasks.length === 0" class="placeholder">{{ emptyMessage }}</div>
+            <div v-for="group in groupedTasks" :key="group.date" class="date-group">
+                <div class="date-header-container"
+                    :class="{ collapsible: group.isCollapsible, collapsed: group.isCollapsible && isGroupCollapsed(group.date) }"
+                    @click="group.isCollapsible ? toggleGroup(group.date) : null">
+                    <span v-if="group.isCollapsible" class="collapse-toggle-icon">
+                        <i data-feather="chevron-down" class="icon-toggle"></i>
+                    </span>
+                    <h3 class="completion-date">{{ formatDate(group.date) }}</h3>
+                </div>
+                <ul class="task-list completed-list" :class="{ collapsed: group.isCollapsible && isGroupCollapsed(group.date) }">
+                    <task-item
+                        v-for="task in group.tasks"
+                        :key="task.id"
+                        :task="task"
+                        :selection-mode="isSelecting"
+                        :selected="selectedIds.has(task.id)"
+                        :expanded="expandedTaskIds.has(task.id)"
+                        @toggle-select="toggleSelect(task.id)"
+                        @update-task="emit('update-task', $event)"
+                        @delete-task="emit('delete-task', $event)"
+                        @filter-by-tag="emit('filter-by-tag', $event)"
+                        @set-task-expanded="emit('set-task-expanded', $event)">
+                    </task-item>
+                </ul>
+            </div>
+        </div>
+    </script>
+
+    <!-- TaskItem Template -->
+    <script type="text/x-template" id="task-item-template">
+        <li
+            :data-id="task.id"
+            class="task-item"
+            :class="{ completed: task.completed, important: task.isImportant && !task.completed, 'show-details': expanded }">
+
+            <div class="task-main">
+                <span :class="task.completed ? 'drag-handle-hidden' : 'drag-handle'">
+                    <i data-feather="move" class="icon-s"></i>
+                </span>
+                <input type="checkbox" :checked="selectionMode ? selected : task.completed" @change="handleCheckboxChange" class="standard-checkbox" :aria-label="selectionMode ? 'Select task' : 'Mark task complete'" />
+
+                <input v-if="isEditing" ref="editInputRef" v-model="editText" type="text" class="task-text-editor" @blur="saveEdit" @keydown.enter="saveEdit" @keydown.esc="cancelEdit" aria-label="Edit task text" />
+                <span v-else class="task-text" @dblclick="!task.completed && startEditing()" :title="!task.completed ? 'Double-click to edit' : ''" v-html="linkify(task.text)"></span>
+
+                <span v-if="task.dueDate" class="due-badge" :class="{ overdue: isOverdue }">
+                    <i data-feather="calendar" class="icon-xs"></i> {{ formattedDueDate }}
+                </span>
+
+                <button v-if="subtaskProgress" @click="toggleDetails" class="subtask-progress-badge" :class="{ expanded: expanded }" type="button" :title="expanded ? 'Hide subtasks' : 'Show subtasks'">
+                    <svg class="progress-ring" viewBox="0 0 18 18" width="14" height="14" aria-hidden="true">
+                        <circle class="progress-ring-bg" cx="9" cy="9" r="7"></circle>
+                        <circle class="progress-ring-fill" cx="9" cy="9" r="7" stroke-dasharray="43.98" :stroke-dashoffset="subtaskProgressRingOffset"></circle>
+                    </svg>
+                    {{ subtaskProgress }}
+                    <i data-feather="chevron-down" class="icon-xs"></i>
+                </button>
+
+                <span v-if="task.tags && task.tags.length" class="tag-chip-strip">
+                    <button v-for="tag in task.tags" :key="tag" type="button" class="tag-chip tag-chip-compact" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
+                </span>
+
+                <div class="task-actions" v-if="!selectionMode">
+                    <button v-if="task.completed && (task.description || task.subtasks?.length > 0 || task.dueDate || task.tags?.length > 0)" @click="toggleDetails" class="task-action-btn view-details-btn" :class="{ expanded: expanded }" title="View details" aria-label="View details">
+                        <i data-feather="chevron-down" class="icon-s"></i>
+                    </button>
+                    <template v-if="!task.completed">
+                        <button @click="toggleImportance" class="task-action-btn star-btn" title="Toggle importance" aria-label="Toggle importance">
+                            <i data-feather="star" class="icon-s"></i>
+                        </button>
+                        <button @click="toggleDetails" class="task-action-btn add-subtask-btn" title="Subtasks, description, due date" aria-label="Show subtasks, description, and due date">
+                            <i data-feather="plus-circle" class="icon-s"></i>
+                        </button>
+                    </template>
+                    <button @click="handleDelete" class="task-action-btn delete-btn" title="Delete task" aria-label="Delete task">
+                        <i data-feather="trash-2" class="icon-s"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="task-details-container">
+                <!-- Due Date -->
+                <div class="due-date-row" v-if="!task.completed">
+                    <label>
+                        <i data-feather="calendar" class="icon-xs"></i> Due:
+                        <input type="date" :value="task.dueDate || ''" @input="setDueDate($event.target.value)" aria-label="Due date" />
+                    </label>
+                    <button v-if="task.dueDate" @click="setDueDate('')" class="task-action-btn" title="Clear due date" aria-label="Clear due date">
+                        <i data-feather="x" class="icon-xs"></i>
+                    </button>
+                </div>
+                <div class="due-date-row" v-else-if="task.dueDate">
+                    <i data-feather="calendar" class="icon-xs"></i> Due: {{ formattedDueDate }}
+                </div>
+
+                <!-- Tags -->
+                <div class="tags-row" v-if="!task.completed">
+                    <i data-feather="tag" class="icon-xs"></i>
+                    <span v-for="tag in task.tags" :key="tag" class="tag-chip">
+                        <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
+                        <button @click="removeTag(tag)" type="button" class="tag-chip-remove" aria-label="Remove tag">
+                            <i data-feather="x" class="icon-xs"></i>
+                        </button>
+                    </span>
+                    <input type="text" v-model="newTagText" @keydown.enter.prevent="addTag" placeholder="Add tag..." class="tag-input" aria-label="Add tag" />
+                </div>
+                <div class="tags-row" v-else-if="task.tags && task.tags.length">
+                    <i data-feather="tag" class="icon-xs"></i>
+                    <span v-for="tag in task.tags" :key="tag" class="tag-chip">
+                        <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
+                    </span>
+                </div>
+
+                <!-- Description Area -->
+                <div v-if="isEditingDescription" class="task-description-editor">
+                    <textarea v-model="descriptionEditText" ref="descTextarea" placeholder="Add a description... supports **bold**, *italic*, `code`, links, and [label](url)" aria-label="Task description"></textarea>
+                    <button @click="saveDescription" type="button">Save</button>
+                    <button @click="cancelDescription" class="secondary" type="button">Cancel</button>
+                </div>
+                <div v-else-if="task.description" class="task-description-display" @click="startEditingDescription" v-html="linkifiedDescription"></div>
+                <div v-else-if="!task.completed" class="task-description-display task-description-placeholder" @click="startEditingDescription">
+                    Add a description...
+                </div>
+
+                <!-- Subtask List -->
+                <subtask-list :task="task" @update-subtasks="handleSubtasksUpdate"></subtask-list>
+            </div>
+        </li>
+    </script>
+
+    <!-- SubtaskList Template -->
+    <script type="text/x-template" id="subtask-list-template">
+        <div class="subtask-container">
+            <ul v-show="task.subtasks && task.subtasks.length > 0" class="subtask-list" ref="listRef">
+                <subtask-item
+                    v-for="subtask in sortedSubtasks"
+                    :key="subtask.id"
+                    :subtask="subtask"
+                    :parent-completed="task.completed"
+                    @update="updateSubtask"
+                    @delete="deleteSubtask(subtask.id)">
+                </subtask-item>
+            </ul>
+            <form v-if="!task.completed" @submit.prevent="addSubtask" id="add-subtask-form">
+                <input type="text" v-model="newSubtaskText" placeholder="Add a subtask..." required aria-label="New subtask text" />
+                <button type="submit">Add</button>
+            </form>
+        </div>
+    </script>
+
+    <!-- SubtaskItem Template -->
+    <script type="text/x-template" id="subtask-item-template">
+        <li class="subtask-item" :class="{ completed: subtask.completed }">
+            <span :class="(parentCompleted || subtask.completed) ? 'subtask-drag-handle-hidden' : 'subtask-drag-handle'">
+                <i data-feather="move" class="icon-s"></i>
+            </span>
+            <input type="checkbox" :checked="subtask.completed" :disabled="parentCompleted" @change="toggleComplete" :aria-label="'Mark subtask ' + subtask.text + ' complete'" />
+            <input v-if="isEditing" ref="editInputRef" v-model="editText" type="text" class="subtask-text-editor" @blur="saveEdit" @keydown.enter="saveEdit" @keydown.esc="cancelEdit" aria-label="Edit subtask text" />
+            <span v-else class="subtask-text" @dblclick="!parentCompleted && startEditing()" v-html="linkify(subtask.text)"></span>
+            <button v-if="!parentCompleted" @click="emit('delete')" class="delete-subtask-btn" type="button" aria-label="Delete subtask">
+                <i data-feather="x" class="icon-xs"></i>
+            </button>
+        </li>
+    </script>
+
+    <!-- Main Application Script -->
+    <script src="./script.js"></script>
+</body>
+</html>
