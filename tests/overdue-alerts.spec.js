@@ -32,10 +32,17 @@ async function setup(page, { permission = 'default', time } = {}) {
   await page.reload();
 }
 
+// Local date components, not toISOString() (which is UTC) - the app parses
+// due dates as local time (see getTaskDueDateTime in script.js), so in any
+// timezone ahead of UTC there are hours each day where the UTC date and local
+// date disagree, which made "today" here silently mean "yesterday" to the app.
 function dateOffset(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 const YESTERDAY = dateOffset(-1);
 const TWO_DAYS_AGO = dateOffset(-2);

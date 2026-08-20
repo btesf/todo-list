@@ -291,7 +291,60 @@
       border-radius: 999px;
       font-weight: 600;
   }
-  
+  .section-toggle-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+  }
+  .section-toggle-btn:hover,
+  .section-toggle-btn:focus,
+  .section-toggle-btn:focus-visible {
+      background-color: transparent;
+  }
+  .section-toggle-btn:focus-visible {
+      border-radius: 999px;
+  }
+  .section-toggle-chevron {
+      transition: transform 0.2s ease-in-out;
+  }
+  /* The dynamic class lives on .section-toggle-btn, not on this icon itself -
+     feather.replace() swaps the <i data-feather> for a fresh <svg> node, so a
+     :class binding placed directly on it would end up tracking a detached
+     element Vue no longer renders. Same reason the other rotating icons in
+     this app (subtask progress badge, view-details button, date-group
+     collapse) all key off a parent class instead. */
+  .section-toggle-btn.collapsed .section-toggle-chevron {
+      transform: rotate(-90deg);
+  }
+
+  /* Same grid-rows technique as .task-details-container (see comment there
+     for why, over a max-height approach), with the focus-ring clearance
+     fix baked in from the start this time instead of as an afterthought. */
+  .collapsible-section {
+      display: grid;
+      grid-template-rows: 1fr;
+      visibility: visible;
+      transition: grid-template-rows 0.3s ease;
+  }
+  .collapsible-section.collapsed {
+      grid-template-rows: 0fr;
+      visibility: hidden;
+      transition: grid-template-rows 0.3s ease, visibility 0s linear 0.3s;
+  }
+  .collapsible-section-inner {
+      overflow: hidden;
+      min-height: 0;
+      padding: 4px;
+      margin: -4px;
+  }
+
   .bulk-edit-controls { display: flex; gap: var(--spacing-sm); justify-content: flex-end; margin-bottom: var(--spacing-sm); }
   .bulk-btn { font-size: var(--font-size-sm); padding: var(--spacing-xs); }
   .bulk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -672,12 +725,17 @@
   .date-header-container.collapsed .collapse-toggle-icon { transform: rotate(-90deg); }
   
   .completed-list {
-      margin-top: var(--spacing-sm);
-      margin-left: -4px;
+      /* Clearance on every side, not just left/right - a persistent card
+         shadow (or a focus ring) on the topmost/bottommost item needs room
+         to render before hitting this wrapper's overflow:hidden clip, same
+         as the left/right case. Padding gives the room; the matching
+         negative margin cancels it back out so outer spacing is unchanged. */
+      margin-top: calc(var(--spacing-sm) - 4px);
       margin-right: -4px;
-      padding-left: 4px;
-      padding-right: 4px;
-      transition: max-height 0.3s ease-out, opacity 0.3s ease-in-out;
+      margin-bottom: -4px;
+      margin-left: -4px;
+      padding: 4px;
+      transition: max-height 0.3s ease-out, opacity 0.3s ease-in-out, margin-top 0.3s ease-out;
       max-height: 1000px;
       overflow: hidden;
       opacity: 1;
@@ -685,7 +743,7 @@
   .completed-list.collapsed {
       max-height: 0;
       opacity: 0;
-      margin-top: 0;
+      margin-top: -4px;
   }
   
   /* --- Placeholders --- */

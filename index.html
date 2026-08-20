@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Enhanced To-Do List</title>
+    <title>Docket</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
@@ -17,7 +17,7 @@
     <!-- The main div where our Vue app will be mounted -->
     <div id="app" class="app-container">
         <div class="app-header">
-            <h1>My Tasks</h1>
+            <h1>Docket</h1>
             <button @click="toggleTheme" class="theme-toggle-btn" type="button" :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
                 <svg v-if="theme === 'dark'" class="icon-m" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
@@ -84,7 +84,7 @@
 
         <!-- Add Task Form -->
         <form @submit.prevent="addTask">
-            <input type="text" v-model="newTaskText" placeholder="Add a new task..." required aria-label="New task text" autofocus />
+            <input type="text" v-model="newTaskText" @input="handleNewTaskInput" placeholder="Add a new task..." required aria-label="New task text" autofocus />
             <button type="submit">
                 <i data-feather="plus" class="icon-s"></i> Add Task
             </button>
@@ -114,20 +114,27 @@
         <div class="task-section">
             <div class="section-header">
                 <h2>
-                    <i data-feather="check-circle" class="icon-m"></i> Completed
+                    <button type="button" class="section-toggle-btn" :class="{ collapsed: completedSectionCollapsed }" @click="toggleCompletedSection" :aria-expanded="String(!completedSectionCollapsed)" aria-controls="completed-section-content">
+                        <i data-feather="check-circle" class="icon-m"></i> Completed
+                        <i data-feather="chevron-down" class="icon-s section-toggle-chevron"></i>
+                    </button>
                 </h2>
             </div>
-            <completed-tasks
-                :tasks="completedTasks"
-                :empty-message="completedEmptyMessage"
-                :expanded-task-ids="expandedTaskIds"
-                @update-task="updateTask"
-                @delete-task="deleteTask"
-                @delete-many="deleteMany"
-                @clear-completed="clearCompleted"
-                @filter-by-tag="handleFilterByTag"
-                @set-task-expanded="setTaskExpanded">
-            </completed-tasks>
+            <div id="completed-section-content" class="collapsible-section" :class="{ collapsed: completedSectionCollapsed }">
+              <div class="collapsible-section-inner">
+                <completed-tasks
+                    :tasks="completedTasks"
+                    :empty-message="completedEmptyMessage"
+                    :expanded-task-ids="expandedTaskIds"
+                    @update-task="updateTask"
+                    @delete-task="deleteTask"
+                    @delete-many="deleteMany"
+                    @clear-completed="clearCompleted"
+                    @filter-by-tag="handleFilterByTag"
+                    @set-task-expanded="setTaskExpanded">
+                </completed-tasks>
+              </div>
+            </div>
         </div>
 
         <!-- Data Transfer -->
@@ -148,11 +155,11 @@
             <button
               v-if="showAutoSaveFooterButton"
               @click="handleAutoSaveClick"
-              class="action-btn"
+              class="action-btn action-btn-quiet"
               :class="{ 'auto-save-connected': autoSaveState === 'connected', 'auto-save-reconnect': autoSaveState === 'reconnect-needed' }"
               :title="autoSaveState === 'connected' ? 'Auto-save is on — click to disable' : autoSaveState === 'reconnect-needed' ? 'Auto-save needs permission again' : 'Save changes automatically to a local file'"
             >
-              <i data-feather="save" class="icon-s"></i> {{ autoSaveLabel }}
+              <i data-feather="save" class="icon-xs"></i><span>{{ autoSaveLabel }}</span>
             </button>
         </div>
 

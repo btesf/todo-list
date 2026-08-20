@@ -53,7 +53,10 @@ test('an optional due time combines with the date in the pill, and overdue styli
 });
 
 test('due today is overdue once its time has passed, not before (visual styling)', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  // Local date components, not toISOString() (UTC) - see the identical fix
+  // and explanation in overdue-alerts.spec.js's dateOffset() helper.
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   await addTask(page, 'Overdue by time');
   const overdueRow = taskRow(page, 'Overdue by time');

@@ -1,4 +1,4 @@
-# Enhanced To-Do List
+# Docket
 
 A single-page to-do list app with no build step: Vue 3, SortableJS, and Feather
 Icons are loaded straight from a CDN in `index.html`, and the whole app is one
@@ -254,7 +254,7 @@ below for why it exists before you skip straight to the plain CLI command.
      — not a `localhost` dev server — so the app's origin (and therefore its
      `localStorage`/IndexedDB data) stays stable across every future launch,
      regardless of what port a dev server might otherwise pick.
-   - Names the app "My Tasks", sized 900×800, `arm64` (Apple Silicon),
+   - Names the app "Docket", sized 900×800, `arm64` (Apple Silicon),
      `singleInstance: true` (clicking the app again while it's open focuses
      the existing window instead of opening a second one), `fastQuit: true`
      (quits when you close the window, standard behavior for a small utility
@@ -266,7 +266,7 @@ below for why it exists before you skip straight to the plain CLI command.
 
 3. **Find the built app** at:
    ```
-   build/My Tasks-darwin-arm64/My Tasks.app
+   build/Docket-darwin-arm64/Docket.app
    ```
    Drag it into `/Applications` if you want it there, or just double-click it
    in place to launch it.
@@ -289,7 +289,7 @@ The plain command *should* work:
 
 ```bash
 nativefier "file:///absolute/path/to/index.html" \
-  --name "My Tasks" --platform mac --arch arm64 \
+  --name "Docket" --platform mac --arch arm64 \
   --width 900 --height 800 --single-instance --fast-quit
 ```
 

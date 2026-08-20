@@ -1,9 +1,30 @@
 const { test, expect } = require('@playwright/test');
-const { resetApp, addTask, taskRow, dragHandle } = require('./helpers');
+const { resetApp, addTask, taskRow, dragHandle, completeTask } = require('./helpers');
 
 test.beforeEach(async ({ page }) => {
   page.on('dialog', d => d.accept());
   await resetApp(page);
+});
+
+function formatSlashDate(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+test('typing /today expands in place once followed by a space', async ({ page }) => {
+  const input = page.getByPlaceholder('Add a new task...');
+  await input.pressSequentially('/today');
+  await input.press('Space');
+  await expect(input).toHaveValue(formatSlashDate(0) + ' ');
+});
+
+test('/tomorrow and /yesterday expand at submit time even with no trailing space typed', async ({ page }) => {
+  await addTask(page, '/tomorrow');
+  await expect(taskRow(page, formatSlashDate(1))).toBeVisible();
+
+  await addTask(page, '/yesterday plan');
+  await expect(taskRow(page, `${formatSlashDate(-1)} plan`)).toBeVisible();
 });
 
 test('adds a task and shows it in Pending', async ({ page }) => {
@@ -65,4 +86,25 @@ test('drag-reorders pending tasks', async ({ page }) => {
   const texts = page.locator('.task-list .task-item .task-text');
   await expect(texts.nth(0)).toHaveText('Task A');
   await expect(texts.nth(1)).toHaveText('Task B');
+});
+
+test('the Completed section can be collapsed and expanded, and the choice persists across reload', async ({ page }) => {
+  await addTask(page, 'Finished task');
+  await completeTask(page, 'Finished task');
+
+  const toggle = page.getByRole('button', { name: 'Completed', exact: true });
+  const completedItem = page.locator('#completed-container .task-item', { hasText: 'Finished task' });
+  await expect(completedItem).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+  await toggle.click();
+  await expect(completedItem).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  await page.reload();
+  await expect(page.locator('#completed-container .task-item', { hasText: 'Finished task' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Completed', exact: true })).toHaveAttribute('aria-expanded', 'false');
+
+  await page.getByRole('button', { name: 'Completed', exact: true }).click();
+  await expect(page.locator('#completed-container .task-item', { hasText: 'Finished task' })).toBeVisible();
 });

@@ -36,7 +36,7 @@ async function main() {
   const rawOptions = {
     targetUrl,
     out: outputDirectory,
-    name: 'My Tasks',
+    name: 'Docket',
     platform: 'mac',
     arch: 'arm64',
     electronVersion: '43.4.1',
