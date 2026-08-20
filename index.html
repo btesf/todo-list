@@ -33,6 +33,33 @@
             </button>
         </div>
 
+        <!-- Overdue task alert (shown when tasks newly become overdue; stays until dismissed) -->
+        <div v-if="overdueAlert" class="auto-save-banner overdue-alert-banner">
+            <span>
+                <i data-feather="alert-triangle" class="icon-s"></i>
+                {{ overdueAlert.message }}
+            </span>
+            <div class="auto-save-banner-actions">
+                <button @click="dismissOverdueAlert" type="button" class="task-action-btn" aria-label="Dismiss">
+                    <i data-feather="x" class="icon-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Notification permission nudge (shown once, until decided or dismissed) -->
+        <div v-if="showNotifyBanner" class="auto-save-banner">
+            <span>
+                <i data-feather="bell" class="icon-s"></i>
+                Get notified when a task becomes overdue, even if this window isn't focused.
+            </span>
+            <div class="auto-save-banner-actions">
+                <button @click="enableOverdueNotifications" type="button" class="action-btn">Enable notifications</button>
+                <button @click="dismissNotifyBanner" type="button" class="task-action-btn" aria-label="Dismiss">
+                    <i data-feather="x" class="icon-xs"></i>
+                </button>
+            </div>
+        </div>
+
         <!-- Auto-save nudge (shown once, until connected or dismissed) -->
         <div v-if="showAutoSaveBanner" class="auto-save-banner">
             <span>
@@ -228,7 +255,7 @@
                 <span v-else class="task-text" @dblclick="!task.completed && startEditing()" :title="!task.completed ? 'Double-click to edit' : ''" v-html="linkify(task.text)"></span>
 
                 <span v-if="task.dueDate" class="due-badge" :class="{ overdue: isOverdue }">
-                    <i data-feather="calendar" class="icon-xs"></i> {{ formattedDueDate }}
+                    <i data-feather="calendar" class="icon-xs"></i> {{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                 </span>
 
                 <button v-if="subtaskProgress" @click="toggleDetails" class="subtask-progress-badge" :class="{ expanded: expanded }" type="button" :title="expanded ? 'Hide subtasks' : 'Show subtasks'">
@@ -269,7 +296,7 @@
                 <div class="meta-row" v-if="!task.completed">
                     <template v-if="!isEditingDueDate">
                         <button v-if="task.dueDate" @click="startEditingDueDate" type="button" class="meta-pill" :class="{ overdue: isOverdue }">
-                            <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}
+                            <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                         </button>
                         <button v-else @click="startEditingDueDate" type="button" class="meta-pill meta-pill-ghost">
                             <i data-feather="calendar" class="icon-xs"></i>Due date
@@ -278,7 +305,10 @@
                             <i data-feather="x" class="icon-xs"></i>
                         </button>
                     </template>
-                    <input v-else type="date" ref="dueDateInputRef" :value="task.dueDate || ''" @input="setDueDate($event.target.value)" @blur="finishEditingDueDate" aria-label="Due date" class="meta-date-input" />
+                    <span v-else class="meta-date-editor" @focusout="handleDueEditFocusOut">
+                        <input type="date" ref="dueDateInputRef" :value="task.dueDate || ''" @input="setDueDate($event.target.value)" aria-label="Due date" class="meta-date-input" />
+                        <input v-if="task.dueDate" type="time" step="900" :value="task.dueTime || ''" @input="setDueTime($event.target.value)" aria-label="Due time" class="meta-time-input" />
+                    </span>
 
                     <span v-for="tag in task.tags" :key="tag" class="tag-chip">
                         <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
@@ -293,7 +323,7 @@
                 </div>
                 <div class="meta-row" v-else-if="task.dueDate || (task.tags && task.tags.length)">
                     <span v-if="task.dueDate" class="meta-pill">
-                        <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}
+                        <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                     </span>
                     <span v-for="tag in task.tags" :key="tag" class="tag-chip">
                         <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>

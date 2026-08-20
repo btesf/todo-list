@@ -104,6 +104,11 @@
   .auto-save-banner span { display: flex; align-items: center; gap: var(--spacing-xs); }
   .auto-save-banner-actions { display: flex; align-items: center; gap: var(--spacing-xs); flex-shrink: 0; }
   .auto-save-banner .action-btn { font-size: var(--font-size-sm); padding: var(--spacing-xs) var(--spacing-sm); white-space: nowrap; }
+  .overdue-alert-banner {
+    background-color: color-mix(in srgb, var(--danger-color) 10%, var(--background-color));
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+  }
 
   .search-box {
     margin-bottom: var(--spacing-lg);
@@ -411,7 +416,8 @@
     padding: 2px;
   }
   .meta-pill-clear:hover { color: var(--danger-color); }
-  .meta-date-input { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); height: auto; }
+  .meta-date-editor { display: inline-flex; align-items: center; gap: var(--spacing-xs); }
+  .meta-date-input, .meta-time-input { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); height: auto; }
 
   /* --- Subtask Progress Badge / Expand Chevron --- */
   .subtask-progress-badge {
