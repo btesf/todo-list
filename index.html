@@ -263,33 +263,38 @@
             </div>
 
             <div class="task-details-container">
-                <!-- Due Date -->
-                <div class="due-date-row" v-if="!task.completed">
-                    <label>
-                        <i data-feather="calendar" class="icon-xs"></i> Due:
-                        <input type="date" :value="task.dueDate || ''" @input="setDueDate($event.target.value)" aria-label="Due date" />
-                    </label>
-                    <button v-if="task.dueDate" @click="setDueDate('')" class="task-action-btn" title="Clear due date" aria-label="Clear due date">
-                        <i data-feather="x" class="icon-xs"></i>
-                    </button>
-                </div>
-                <div class="due-date-row" v-else-if="task.dueDate">
-                    <i data-feather="calendar" class="icon-xs"></i> Due: {{ formattedDueDate }}
-                </div>
+                <!-- Due date + Tags: a single compact pill row instead of two full-width
+                     rows, so tasks with many subtasks don't scroll past a wall of empty
+                     "Add tag..."/"dd.mm.yyyy" chrome before reaching the actual content. -->
+                <div class="meta-row" v-if="!task.completed">
+                    <template v-if="!isEditingDueDate">
+                        <button v-if="task.dueDate" @click="startEditingDueDate" type="button" class="meta-pill" :class="{ overdue: isOverdue }">
+                            <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}
+                        </button>
+                        <button v-else @click="startEditingDueDate" type="button" class="meta-pill meta-pill-ghost">
+                            <i data-feather="calendar" class="icon-xs"></i>Due date
+                        </button>
+                        <button v-if="task.dueDate" @click="setDueDate('')" type="button" class="meta-pill-clear" aria-label="Clear due date">
+                            <i data-feather="x" class="icon-xs"></i>
+                        </button>
+                    </template>
+                    <input v-else type="date" ref="dueDateInputRef" :value="task.dueDate || ''" @input="setDueDate($event.target.value)" @blur="finishEditingDueDate" aria-label="Due date" class="meta-date-input" />
 
-                <!-- Tags -->
-                <div class="tags-row" v-if="!task.completed">
-                    <i data-feather="tag" class="icon-xs"></i>
                     <span v-for="tag in task.tags" :key="tag" class="tag-chip">
                         <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
                         <button @click="removeTag(tag)" type="button" class="tag-chip-remove" aria-label="Remove tag">
                             <i data-feather="x" class="icon-xs"></i>
                         </button>
                     </span>
-                    <input type="text" v-model="newTagText" @keydown.enter.prevent="addTag" placeholder="Add tag..." class="tag-input" aria-label="Add tag" />
+                    <input v-if="isAddingTag" ref="tagInputRef" type="text" v-model="newTagText" @keydown.enter.prevent="addTag" @keydown.esc="cancelAddingTag" @blur="handleTagInputBlur" placeholder="Tag name..." class="tag-input" aria-label="Add tag" />
+                    <button v-else @click="startAddingTag" type="button" class="meta-pill meta-pill-ghost">
+                        <i data-feather="tag" class="icon-xs"></i>Tag
+                    </button>
                 </div>
-                <div class="tags-row" v-else-if="task.tags && task.tags.length">
-                    <i data-feather="tag" class="icon-xs"></i>
+                <div class="meta-row" v-else-if="task.dueDate || (task.tags && task.tags.length)">
+                    <span v-if="task.dueDate" class="meta-pill">
+                        <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}
+                    </span>
                     <span v-for="tag in task.tags" :key="tag" class="tag-chip">
                         <button type="button" class="tag-chip-label" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
                     </span>

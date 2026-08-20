@@ -369,16 +369,49 @@
     color: white;
     background-color: var(--danger-color);
   }
-  .due-date-row {
+  /* --- Meta row: due date + tags as compact pills, sharing one row (see
+     task-item-template) instead of two full-width "Add tag.../dd.mm.yyyy"
+     rows - keeps large tasks with many subtasks from being pushed down by
+     chrome for two fields that are often empty. --- */
+  .meta-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--spacing-xs);
     font-size: var(--font-size-sm);
     color: var(--text-muted);
     margin-bottom: var(--spacing-sm);
   }
-  .due-date-row label { display: flex; align-items: center; gap: var(--spacing-xs); }
-  .due-date-row input[type="date"] { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); }
+  .meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background-color: var(--medium-gray);
+    color: var(--text-muted);
+    border: none;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: inherit;
+    white-space: nowrap;
+  }
+  button.meta-pill:hover { background-color: var(--border-color); }
+  .meta-pill.overdue { color: white; background-color: var(--danger-color); }
+  .meta-pill-ghost {
+    background-color: transparent;
+    border: 1px dashed var(--border-color);
+    color: var(--text-muted);
+  }
+  .meta-pill-ghost:hover { border-color: var(--dark-gray); color: var(--text-color); background-color: transparent; }
+  .meta-pill-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    padding: 2px;
+  }
+  .meta-pill-clear:hover { color: var(--danger-color); }
+  .meta-date-input { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); height: auto; }
 
   /* --- Subtask Progress Badge / Expand Chevron --- */
   .subtask-progress-badge {
@@ -450,19 +483,9 @@
     padding: 2px 4px 2px 0;
   }
   .tag-chip-remove:hover { color: var(--danger-color); }
-  .tags-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
-    color: var(--text-muted);
-    margin-bottom: var(--spacing-sm);
-  }
   .tag-input {
-    width: auto;
-    min-width: 6rem;
-    flex: 1 1 6rem;
+    width: 8rem;
+    flex: 0 0 auto;
     padding: 2px 4px;
     font-size: var(--font-size-sm);
     height: auto;

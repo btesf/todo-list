@@ -48,6 +48,7 @@ test('expanded state survives completing and un-completing a task', async ({ pag
   await addTask(page, 'Task with history');
   const row = taskRow(page, 'Task with history');
   await openDetails(row);
+  await row.getByRole('button', { name: 'Due date', exact: true }).click();
   await row.locator('input[type="date"]').fill('2027-01-01'); // gives the completed row a "View details" button
 
   await completeTask(page, 'Task with history');
@@ -57,4 +58,17 @@ test('expanded state survives completing and un-completing a task', async ({ pag
 
   await completedRow.getByRole('checkbox', { name: 'Mark task complete' }).click();
   await expect(taskRow(page, 'Task with history')).toHaveClass(/show-details/);
+});
+
+test('expanded state survives a full page reload, but is not written to the exported task data', async ({ page }) => {
+  await addTask(page, 'Persisted expand');
+  await addTask(page, 'Stays collapsed');
+  await openDetails(taskRow(page, 'Persisted expand'));
+
+  const exported = JSON.parse(await page.evaluate(() => localStorage.getItem('enhancedTodoAppTasks_vue_v2')));
+  expect(Object.keys(exported[0])).not.toContain('expanded');
+
+  await page.reload();
+  await expect(taskRow(page, 'Persisted expand')).toHaveClass(/show-details/);
+  await expect(taskRow(page, 'Stays collapsed')).not.toHaveClass(/show-details/);
 });
