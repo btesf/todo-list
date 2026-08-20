@@ -450,9 +450,17 @@
     visibility: hidden;
     transition: grid-template-rows 0.3s ease, opacity 0.25s ease-in-out, margin-top 0.3s ease, visibility 0s linear 0.3s;
   }
+  /* overflow: hidden here clips the collapse animation as intended, but it
+     also clips anything that legitimately paints outside an element's box -
+     like a focused input's box-shadow ring. Padding gives that ring room to
+     render before the clip boundary; the matching negative margin cancels the
+     padding back out so the wrapper's own footprint (and the grid row height
+     driving the collapse animation) is unaffected. */
   .task-details-inner {
     overflow: hidden;
     min-height: 0;
+    padding: 4px;
+    margin: -4px;
   }
   /* visibility flips to hidden only after the collapse animation finishes (matching
      the transition above), so content isn't yanked away mid-shrink, but also isn't
@@ -665,6 +673,10 @@
   
   .completed-list {
       margin-top: var(--spacing-sm);
+      margin-left: -4px;
+      margin-right: -4px;
+      padding-left: 4px;
+      padding-right: 4px;
       transition: max-height 0.3s ease-out, opacity 0.3s ease-in-out;
       max-height: 1000px;
       overflow: hidden;
