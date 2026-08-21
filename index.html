@@ -16,6 +16,11 @@
 <body>
     <!-- The main div where our Vue app will be mounted -->
     <div id="app" class="app-container">
+      <!-- Pinned region: the title alone used to be sticky, which pinned the one
+           thing you never need. The controls you actually reach for in a long
+           list - add-task, then search - ride along with it now. Dismissible
+           banners deliberately sit below, in normal flow. -->
+      <div class="app-sticky">
         <div class="app-header">
             <h1>Docket</h1>
             <button @click="toggleTheme" class="theme-toggle-btn" type="button" :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
@@ -35,6 +40,23 @@
                 </svg>
             </button>
         </div>
+
+        <!-- Add Task Form -->
+        <form @submit.prevent="addTask">
+            <input type="text" v-model="newTaskText" @input="handleNewTaskInput" placeholder="Add a new task..." required aria-label="New task text" autofocus />
+            <button type="submit">
+                <i data-feather="plus" class="icon-s"></i> Add Task
+            </button>
+        </form>
+
+        <!-- Search / Filter: below the add form and visually quieter - adding is the
+             everyday action, searching is occasional, and at equal weight the two
+             inputs were easy to confuse. -->
+        <div class="search-box">
+            <i data-feather="search" class="icon-s search-box-icon"></i>
+            <input type="text" v-model="searchQuery" @keydown.esc="searchQuery = ''" placeholder="Search tasks..." aria-label="Search tasks" />
+        </div>
+      </div>
 
         <!-- Overdue task alert (shown when tasks newly become overdue; stays until dismissed) -->
         <div v-if="overdueAlert" class="auto-save-banner overdue-alert-banner">
@@ -77,18 +99,84 @@
             </div>
         </div>
 
-        <!-- Search / Filter -->
-        <div class="search-box">
-            <input type="text" v-model="searchQuery" placeholder="Search tasks..." aria-label="Search tasks" />
+        <!-- Tag overview: only appears once tags exist. Tags were previously
+             only reachable by spotting a chip on some task - no way to see the
+             full set, fix a typo, or retire one. -->
+        <div v-if="allTags.length" class="tag-panel">
+            <button
+                @click="toggleTagPanel"
+                type="button"
+                class="tag-panel-toggle"
+                :class="{ collapsed: !isTagPanelOpen }"
+                :aria-expanded="String(isTagPanelOpen)"
+                aria-controls="tag-panel-body">
+                <i data-feather="tag" class="icon-xs"></i>Tags
+                <span class="tag-panel-count">{{ allTags.length }}</span>
+                <i data-feather="chevron-down" class="icon-xs tag-panel-chevron"></i>
+            </button>
+            <div id="tag-panel-body" class="collapsible-section" :class="{ collapsed: !isTagPanelOpen }">
+              <div class="collapsible-section-inner">
+                <ul class="tag-manage-list">
+                    <li v-for="tag in allTags" :key="tag.name" class="tag-manage-item" :class="{ active: activeTagFilters.has(tag.name) }">
+                        <!-- Rename mode swaps the whole item for an input. -->
+                        <input
+                            v-if="renamingTag === tag.name"
+                            v-focus
+                            v-model="renameText"
+                            type="text"
+                            class="tag-rename-input"
+                            aria-label="New tag name"
+                            @keydown.enter="commitRenameTag"
+                            @keydown.esc="cancelRenameTag"
+                            @blur="commitRenameTag" />
+                        <template v-else>
+                            <!-- The chip is the filter toggle: click to select/unselect. -->
+                            <button
+                                type="button"
+                                class="tag-chip tag-chip-compact tag-filter-chip"
+                                :class="{ active: activeTagFilters.has(tag.name) }"
+                                :aria-pressed="String(activeTagFilters.has(tag.name))"
+                                @click="toggleTagFilter(tag.name)"
+                                :title="activeTagFilters.has(tag.name) ? 'Remove ' + tag.name + ' filter' : 'Filter by ' + tag.name">{{ tag.name }}</button>
+                            <span class="tag-manage-count">{{ tag.count }}</span>
+                            <button
+                                type="button"
+                                class="task-action-btn tag-manage-rename"
+                                :aria-label="'Rename tag ' + tag.name"
+                                title="Rename everywhere"
+                                @click="startRenameTag(tag.name)">
+                                <i data-feather="edit-2" class="icon-xs"></i>
+                            </button>
+                            <button
+                                type="button"
+                                class="task-action-btn tag-manage-delete"
+                                :aria-label="'Delete tag ' + tag.name"
+                                title="Remove from all tasks"
+                                @click="deleteTag(tag.name)">
+                                <i data-feather="x" class="icon-xs"></i>
+                            </button>
+                        </template>
+                    </li>
+                </ul>
+              </div>
+            </div>
         </div>
 
-        <!-- Add Task Form -->
-        <form @submit.prevent="addTask">
-            <input type="text" v-model="newTaskText" @input="handleNewTaskInput" placeholder="Add a new task..." required aria-label="New task text" autofocus />
-            <button type="submit">
-                <i data-feather="plus" class="icon-s"></i> Add Task
+        <!-- Active tag filters. Always visible (not inside the collapsible tag
+             panel) so what's being filtered, and how to clear it, is never hidden. -->
+        <div v-if="activeTagFilters.size" class="filter-bar" aria-label="Active tag filters">
+            <span class="filter-bar-label">Filtering by</span>
+            <button
+                v-for="tag in [...activeTagFilters]"
+                :key="tag"
+                type="button"
+                class="tag-chip tag-chip-compact active filter-bar-chip"
+                @click="toggleTagFilter(tag)"
+                :aria-label="'Remove ' + tag + ' filter'">
+                {{ tag }} <i data-feather="x" class="icon-xs"></i>
             </button>
-        </form>
+            <button type="button" class="filter-bar-clear" @click="clearTagFilters">Clear</button>
+        </div>
 
         <!-- Pending Tasks Section -->
         <div class="task-section">
@@ -97,11 +185,26 @@
                     <i data-feather="list" class="icon-m"></i>
                     Pending (<span>{{ pendingTasks.length }}</span>)
                 </h2>
+                <!-- Opt-in, never automatic: the list stays in manual order unless
+                     you ask for this. Only offered when something is actually
+                     overdue, so it doesn't sit there as a permanent dead control. -->
+                <button
+                    v-if="overdueCount > 0"
+                    @click="toggleOverdueFirst"
+                    type="button"
+                    class="sort-toggle"
+                    :class="{ active: overdueFirst }"
+                    :aria-pressed="String(overdueFirst)"
+                    :title="overdueFirst ? 'Showing overdue first — drag-reordering is paused. Click to return to manual order.' : 'Group the ' + overdueCount + ' overdue task(s) at the top'">
+                    <i data-feather="alert-triangle" class="icon-xs"></i>Overdue first
+                    <span class="sort-toggle-count">{{ overdueCount }}</span>
+                </button>
             </div>
             <task-list
                 :tasks="pendingTasks"
                 :empty-message="pendingEmptyMessage"
                 :expanded-task-ids="expandedTaskIds"
+                :drag-disabled="overdueFirst"
                 @update-task="updateTask"
                 @delete-task="deleteTask"
                 @order-update="onOrderUpdate"
@@ -181,7 +284,7 @@
 
     <!-- TaskList Template -->
     <script type="text/x-template" id="task-list-template">
-        <ul ref="listRef" class="task-list">
+        <ul ref="listRef" class="task-list" :class="{ 'drag-suspended': dragDisabled }">
             <task-item
                 v-for="task in tasks"
                 :key="task.id"
@@ -221,15 +324,14 @@
             </div>
             <div v-if="tasks.length === 0" class="placeholder">{{ emptyMessage }}</div>
             <div v-for="group in groupedTasks" :key="group.date" class="date-group">
-                <div class="date-header-container"
-                    :class="{ collapsible: group.isCollapsible, collapsed: group.isCollapsible && isGroupCollapsed(group.date) }"
-                    @click="group.isCollapsible ? toggleGroup(group.date) : null">
-                    <span v-if="group.isCollapsible" class="collapse-toggle-icon">
-                        <i data-feather="chevron-down" class="icon-toggle"></i>
-                    </span>
-                    <h3 class="completion-date">{{ formatDate(group.date) }}</h3>
-                </div>
-                <ul class="task-list completed-list" :class="{ collapsed: group.isCollapsible && isGroupCollapsed(group.date) }">
+                <!-- Subordinate to the section pill: small-caps muted label, no rule,
+                     no collapse toggle. The whole Completed section collapses in one
+                     click now, so a second nested collapse was redundant - individual
+                     completed tasks are still expandable via their own chevron. -->
+                <h3 class="completion-date">
+                    {{ formatDate(group.date) }}<span class="completion-date-count">· {{ group.tasks.length }}</span>
+                </h3>
+                <ul class="task-list completed-list">
                     <task-item
                         v-for="task in group.tasks"
                         :key="task.id"
@@ -256,21 +358,32 @@
             :class="{ completed: task.completed, important: task.isImportant && !task.completed, 'show-details': expanded }">
 
             <div class="task-main">
-                <span :class="task.completed ? 'drag-handle-hidden' : 'drag-handle'">
-                    <i data-feather="move" class="icon-s"></i>
-                </span>
-                <span class="checkbox-wrap">
-                    <input type="checkbox" :checked="selectionMode ? selected : task.completed" @change="handleCheckboxChange" class="standard-checkbox" :aria-label="selectionMode ? 'Select task' : 'Mark task complete'" />
-                    <svg class="checkbox-check" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                        <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
-                    </svg>
-                </span>
+                <!-- Handle + checkbox + text are one flex item so they can never be
+                     split across lines. When the row wraps on narrow screens, the
+                     break happens after this group (badges/actions drop to line 2)
+                     rather than orphaning the checkbox above the title. -->
+                <div class="task-lead">
+                    <span :class="task.completed ? 'drag-handle-hidden' : 'drag-handle'">
+                        <i data-feather="move" class="icon-s"></i>
+                    </span>
+                    <span class="checkbox-wrap">
+                        <input type="checkbox" :checked="selectionMode ? selected : task.completed" @change="handleCheckboxChange" class="standard-checkbox" :aria-label="selectionMode ? 'Select task' : 'Mark task complete'" />
+                        <svg class="checkbox-check" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                            <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
+                        </svg>
+                    </span>
 
-                <input v-if="isEditing" ref="editInputRef" v-model="editText" type="text" class="task-text-editor" @blur="saveEdit" @keydown.enter="saveEdit" @keydown.esc="cancelEdit" aria-label="Edit task text" />
-                <span v-else class="task-text" @dblclick="!task.completed && startEditing()" :title="!task.completed ? 'Double-click to edit' : ''" v-html="linkify(task.text)"></span>
+                    <input v-if="isEditing" ref="editInputRef" v-model="editText" type="text" class="task-text-editor" @blur="saveEdit" @keydown.enter="saveEdit" @keydown.esc="cancelEdit" aria-label="Edit task text" />
+                    <span v-else class="task-text" @dblclick="!task.completed && startEditing()" :title="!task.completed ? 'Double-click to edit' : ''" v-html="linkify(task.text)"></span>
+                </div>
 
-                <span v-if="task.dueDate" class="due-badge" :class="{ overdue: isOverdue }">
-                    <i data-feather="calendar" class="icon-xs"></i> {{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
+                <!-- Hidden while expanded: the meta-row below shows the same due date
+                     and tags (there, editable), so rendering both duplicated them - most
+                     visibly on mobile, where the two stacked directly on top of each other. -->
+                <span v-if="task.dueDate && !expanded" class="due-badge" :class="{ overdue: isOverdue }" :title="isOverdue ? 'Overdue' : null">
+                    <!-- Icon swaps to a warning triangle when overdue so the state
+                         isn't signalled by red alone (colour-blind users, greyscale). -->
+                    <i :data-feather="isOverdue ? 'alert-triangle' : 'calendar'" class="icon-xs"></i> {{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                 </span>
 
                 <button v-if="subtaskProgress" @click="toggleDetails" class="subtask-progress-badge" :class="{ expanded: expanded }" type="button" :title="expanded ? 'Hide subtasks' : 'Show subtasks'">
@@ -282,7 +395,7 @@
                     <i data-feather="chevron-down" class="icon-xs"></i>
                 </button>
 
-                <span v-if="task.tags && task.tags.length" class="tag-chip-strip">
+                <span v-if="task.tags && task.tags.length && !expanded" class="tag-chip-strip">
                     <button v-for="tag in task.tags" :key="tag" type="button" class="tag-chip tag-chip-compact" @click="filterByTag(tag)" :title="'Filter by ' + tag">{{ tag }}</button>
                 </span>
 
@@ -311,8 +424,8 @@
                      "Add tag..."/"dd.mm.yyyy" chrome before reaching the actual content. -->
                 <div class="meta-row" v-if="!task.completed">
                     <template v-if="!isEditingDueDate">
-                        <button v-if="task.dueDate" @click="startEditingDueDate" type="button" class="meta-pill" :class="{ overdue: isOverdue }">
-                            <i data-feather="calendar" class="icon-xs"></i>{{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
+                        <button v-if="task.dueDate" @click="startEditingDueDate" type="button" class="meta-pill" :class="{ overdue: isOverdue }" :title="isOverdue ? 'Overdue' : null">
+                            <i :data-feather="isOverdue ? 'alert-triangle' : 'calendar'" class="icon-xs"></i>{{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                         </button>
                         <button v-else @click="startEditingDueDate" type="button" class="meta-pill meta-pill-ghost">
                             <i data-feather="calendar" class="icon-xs"></i>Due date
@@ -352,7 +465,20 @@
                     <button @click="saveDescription" type="button">Save</button>
                     <button @click="cancelDescription" class="secondary" type="button">Cancel</button>
                 </div>
-                <div v-else-if="task.description" class="task-description-display" @click="startEditingDescription" v-html="linkifiedDescription"></div>
+                <template v-else-if="task.description">
+                    <div
+                        ref="descRef"
+                        class="task-description-display"
+                        :class="{ clamped: !isDescExpanded }"
+                        @click="startEditingDescription"
+                        v-html="linkifiedDescription"></div>
+                    <button
+                        v-if="isDescOverflowing"
+                        @click="toggleDescExpanded"
+                        type="button"
+                        class="desc-toggle"
+                        :aria-expanded="String(isDescExpanded)">{{ isDescExpanded ? 'Show less' : 'Show more' }}</button>
+                </template>
                 <div v-else-if="!task.completed" class="task-description-display task-description-placeholder" @click="startEditingDescription">
                     Add a description...
                 </div>
@@ -397,7 +523,22 @@
                 </svg>
             </span>
             <input v-if="isEditing" ref="editInputRef" v-model="editText" type="text" class="subtask-text-editor" @blur="saveEdit" @keydown.enter="saveEdit" @keydown.esc="cancelEdit" aria-label="Edit subtask text" />
-            <span v-else class="subtask-text" @dblclick="!parentCompleted && startEditing()" v-html="linkify(subtask.text)"></span>
+            <!-- Clamped to two lines unless expanded; the toggle is only rendered
+                 when the text actually overflows that clamp. -->
+            <span v-else class="subtask-text-wrap">
+                <span
+                    ref="textRef"
+                    class="subtask-text"
+                    :class="{ clamped: !isTextExpanded }"
+                    @dblclick="!parentCompleted && startEditing()"
+                    v-html="linkify(subtask.text)"></span>
+                <button
+                    v-if="isOverflowing"
+                    @click="toggleTextExpanded"
+                    type="button"
+                    class="subtask-text-toggle"
+                    :aria-expanded="String(isTextExpanded)">{{ isTextExpanded ? 'less' : 'more' }}</button>
+            </span>
             <button v-if="!parentCompleted" @click="emit('delete')" class="delete-subtask-btn" type="button" aria-label="Delete subtask">
                 <i data-feather="x" class="icon-xs"></i>
             </button>

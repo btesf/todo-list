@@ -19,6 +19,12 @@
     --text-muted: oklch(55.4% 0.041 257.4);
     --border-color: oklch(92.9% 0.013 255.5);
     --background-color: oklch(100% 0 0);
+    /* Surface used by task cards. In light mode a white card on a near-white
+       page reads as raised via its shadow alone, so this matches
+       --background-color; dark mode overrides it to a genuinely lighter step
+       (see the dark block), because a black shadow can't create separation
+       against a dark background. */
+    --surface-raised: oklch(100% 0 0);
     --important-border: oklch(76.9% 0.165 70.1); /* Amber for important */
 
     /* Fluid type scale: interpolates between a small-viewport floor and a
@@ -83,19 +89,28 @@
     margin-bottom: 0;
   }
 
+  /* Pinned block: title + add-task + search. The background is near-opaque
+     (96%) rather than the earlier 82% - at that level, colored content passing
+     underneath (the red overdue banner especially) ghosted through the blur as
+     a muddy smear. The slight translucency + blur is kept only for a soft edge. */
+  .app-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-sm);
+    background-color: color-mix(in oklch, var(--background-color) 96%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+  }
+
   .app-header {
     display: flex;
     align-items: center;
     justify-content: center;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    margin: calc(-1 * var(--spacing-sm)) 0 var(--spacing-lg);
-    padding: var(--spacing-sm) 0;
-    background-color: color-mix(in oklch, var(--background-color) 82%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    padding: var(--spacing-sm) 0 var(--spacing-md);
   }
 
   .theme-toggle-btn {
@@ -132,12 +147,35 @@
     color: var(--danger-color);
   }
 
+  /* Quieter than the add-task field: smaller, muted, transparent fill, with a
+     leading magnifier so it reads as a filter rather than a second text entry. */
   .search-box {
-    margin-bottom: var(--spacing-lg);
+    position: relative;
+    display: flex;
+    align-items: center;
+    /* Deliberately short: this filters an existing list by a few characters,
+       so a full-width field both overstated its importance (it ended up wider
+       than the add-task input it sits under) and implied sentence-length input. */
+    max-width: 16rem;
   }
-  .search-box input {
+  .search-box-icon {
+    position: absolute;
+    left: var(--spacing-sm);
+    color: var(--dark-gray);
+    pointer-events: none;
+  }
+  /* input[type="text"] qualified deliberately: the base
+     `button, input[type="text"], textarea { padding: ... }` rule has the same
+     specificity as a bare `.search-box input` and is declared later, so its
+     padding shorthand would win the tie and squash the icon into the text. */
+  .search-box input[type="text"] {
     width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) calc(var(--spacing-sm) + 1.25rem);
+    font-size: var(--font-size-sm);
+    background-color: transparent;
+    color: var(--text-muted);
   }
+  .search-box input[type="text"]:focus { color: var(--text-color); }
   
   h2 {
     font-size: var(--font-size-lg);
@@ -149,13 +187,24 @@
     font-weight: 500;
   }
   
+  /* Date groups sit one level below the section pill, so they get a distinctly
+     quieter treatment rather than a competing one: small caps, muted, no
+     background, no rule. Group separation comes from whitespace + the task
+     cards' own borders/shadows. */
   h3.completion-date {
-    font-size: var(--font-size-base);
-    color: var(--text-muted);
-    margin: 0; /* Reset margin */
-    font-weight: normal;
-    flex-grow: 1; /* Allow date text to take space */
+    font-size: var(--font-size-sm);
+    color: var(--dark-gray);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 var(--spacing-sm) 2px;
   }
+  .completion-date-count {
+    font-weight: 400;
+    margin-left: 0.4em;
+    opacity: 0.65;
+  }
+  .date-group + .date-group h3.completion-date { margin-top: calc(var(--spacing-lg) * 1.25); }
   
   ul {
     list-style: none;
@@ -263,13 +312,12 @@
   .icon-xs { width: 0.75rem; height: 0.75rem; stroke-width: 2.5; }
   .icon-s { width: 0.875rem; height: 0.875rem; stroke-width: 2; }
   .icon-m { width: 1rem; height: 1rem; stroke-width: 2; }
-  .icon-toggle { width: 0.75rem; height: 0.75rem; stroke-width: 2.5; } /* For collapse toggle */
   
   /* --- Add Task Form --- */
   form {
     display: flex;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
   }
   
   input[type="text"] { flex-grow: 1; }
@@ -345,6 +393,148 @@
       margin: -4px;
   }
 
+  /* Sits in the empty right half of .section-header (which is already
+     space-between), so it costs no new layout. Quiet at rest; tinted amber-red
+     when active, matching the overdue language used elsewhere. */
+  .sort-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .sort-toggle:hover {
+    background-color: var(--medium-gray);
+    color: var(--text-color);
+    border-color: var(--dark-gray);
+  }
+  .sort-toggle.active {
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+    background-color: color-mix(in oklch, var(--danger-color) 10%, transparent);
+  }
+  .sort-toggle.active:hover {
+    background-color: color-mix(in oklch, var(--danger-color) 16%, transparent);
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+  }
+  .sort-toggle-count {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+    font-weight: 600;
+  }
+  /* Reordering by hand is meaningless while a sort is forcing positions, so the
+     handles go away entirely rather than appearing draggable but snapping back. */
+  .task-list.drag-suspended .drag-handle { display: none; }
+
+  /* --- Tag overview --- */
+  .tag-panel { margin-bottom: var(--spacing-lg); }
+  .tag-panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+  }
+  .tag-panel-toggle:hover {
+    background-color: var(--medium-gray);
+    color: var(--text-color);
+    border-color: var(--dark-gray);
+  }
+  .tag-panel-count { opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .tag-panel-chevron { transition: transform 0.2s ease-in-out; }
+  .tag-panel-toggle.collapsed .tag-panel-chevron { transform: rotate(-90deg); }
+
+  .tag-manage-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) 2px 0;
+  }
+  .tag-manage-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 2px 4px 2px 2px;
+    background-color: var(--surface-raised);
+  }
+  .tag-manage-count {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    padding: 0 var(--spacing-xs);
+  }
+  /* Management controls stay dim until the row is hovered/focused, so a long tag
+     list reads as data rather than a wall of buttons. */
+  .tag-manage-rename, .tag-manage-delete { opacity: 0.45; transition: opacity var(--transition-speed) ease; }
+  .tag-manage-item:hover .tag-manage-rename,
+  .tag-manage-item:hover .tag-manage-delete,
+  .tag-manage-item:focus-within .tag-manage-rename,
+  .tag-manage-item:focus-within .tag-manage-delete { opacity: 1; }
+  .tag-manage-delete:hover { color: var(--danger-color); background-color: transparent; }
+
+  /* Selected filter chip: filled primary instead of the muted-fill resting
+     state, so what's active is unmistakable at a glance. */
+  .tag-chip.tag-chip-compact.active,
+  button.tag-chip.tag-chip-compact.active {
+    background-color: var(--primary-color);
+    color: white;
+  }
+  .tag-filter-chip { cursor: pointer; }
+  .tag-manage-item.active {
+    border-color: var(--primary-color);
+    background-color: color-mix(in oklch, var(--primary-color) 8%, var(--surface-raised));
+  }
+  .tag-rename-input {
+    font-size: var(--font-size-sm);
+    padding: 2px 6px;
+    width: 9rem;
+    height: auto;
+  }
+
+  /* --- Active tag-filter bar --- */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-lg);
+  }
+  .filter-bar-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-right: var(--spacing-xs);
+  }
+  .filter-bar-chip {
+    cursor: pointer;
+    border: none;
+    /* The trailing × reads as "click to remove". */
+    padding: 2px 6px;
+  }
+  .filter-bar-clear {
+    background: none;
+    border: none;
+    padding: 2px var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: var(--spacing-xs);
+  }
+  .filter-bar-clear:hover { color: var(--danger-color); background-color: transparent; }
+
   .bulk-edit-controls { display: flex; gap: var(--spacing-sm); justify-content: flex-end; margin-bottom: var(--spacing-sm); }
   .bulk-btn { font-size: var(--font-size-sm); padding: var(--spacing-xs); }
   .bulk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -353,7 +543,7 @@
   .task-list { margin-top: var(--spacing-sm); }
   
   .task-list li.task-item {
-    background-color: var(--background-color);
+    background-color: var(--surface-raised);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     margin-bottom: var(--spacing-md);
@@ -379,6 +569,13 @@
   .task-list li.task-item.important .star-btn { color: var(--warning-color); }
   
   .task-main { display: flex; align-items: center; gap: var(--spacing-sm); width: 100%; }
+  .task-lead {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: 1 1 auto;
+    min-width: 0; /* lets long titles wrap inside the group instead of overflowing */
+  }
   
   .task-list li.task-item.completed { background-color: var(--light-gray); opacity: 0.8; }
   .task-list li.task-item.completed .task-text { text-decoration: line-through; color: var(--text-muted); }
@@ -446,7 +643,10 @@
   }
   
   /* --- Task Text & Input --- */
-  .task-text { flex-grow: 1; word-break: break-word; cursor: pointer; padding: 2px 0; transition: color var(--transition-speed) ease; }
+  /* Medium weight so the task title reads as the primary content of the row.
+     There was already a size step down to the metadata (--font-size-sm) and a
+     colour step (--text-muted); at equal weight the title still didn't lead. */
+  .task-text { flex-grow: 1; word-break: break-word; cursor: pointer; padding: 2px 0; font-weight: 500; transition: color var(--transition-speed) ease; }
   
   .task-text-editor, .subtask-text-editor {
     flex-grow: 1;
@@ -474,6 +674,15 @@
   
   /* --- Task Actions --- */
   .task-actions { display: flex; gap: var(--spacing-xs); flex-shrink: 0; align-items: center; margin-left: auto; }
+  /* Delete is the one irreversible action in this cluster and it sat flush
+     against "add subtask" at identical size and colour - an easy misclick.
+     A gap plus a hairline divider separates it without adding weight. */
+  .task-actions .delete-btn {
+    margin-left: var(--spacing-sm);
+    border-left: 1px solid var(--border-color);
+    padding-left: var(--spacing-sm);
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+  }
   .task-action-btn { background: none; border: none; color: var(--text-muted); padding: 3px; display: flex; align-items: center; justify-content: center; border-radius: var(--border-radius); transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease; }
   .task-action-btn:hover { background-color: var(--medium-gray); color: var(--text-color); }
   .task-action-btn.delete-btn:hover { background-color: var(--danger-color); color: white; }
@@ -483,6 +692,26 @@
   /* --- Drag Handle --- */
   .drag-handle { cursor: move; color: var(--dark-gray); padding: 0 var(--spacing-xs); display: flex; align-items: center; touch-action: none; }
   .drag-handle:hover { color: var(--text-color); }
+
+  /* Reordering is occasional, but the handles were permanently visible on every
+     row - so they read as noise. Fade them in on row hover/focus instead. Gated
+     on (hover: hover) so touch devices, which have no hover state and no other
+     way to discover the handle, keep them visible at all times. Opacity rather
+     than visibility keeps the layout stable and the drag target hit-testable. */
+  @media (hover: hover) {
+    .drag-handle, .subtask-drag-handle {
+      opacity: 0;
+      transition: opacity var(--transition-speed) ease;
+    }
+    .task-item:hover .drag-handle,
+    .task-item:focus-within .drag-handle,
+    .subtask-item:hover .subtask-drag-handle,
+    .subtask-item:focus-within .subtask-drag-handle,
+    .dragging .drag-handle,
+    .dragging-fallback .drag-handle {
+      opacity: 1;
+    }
+  }
   .drag-handle-hidden { visibility: hidden; cursor: default; color: var(--dark-gray); padding: 0 var(--spacing-xs); display: flex; align-items: center; }
   
   /* --- Description & Subtask Area ---
@@ -526,9 +755,68 @@
       transition: grid-template-rows 0.3s ease, opacity 0.25s ease-in-out, margin-top 0.3s ease;
   }
 
+  /* --- Code (inline spans + fenced blocks) ---
+     linkify() has emitted <code> for `backticked` text for a while, but nothing
+     ever styled it, so pasted snippets rendered as unremarkable monospace. */
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.9em;
+    background-color: var(--medium-gray);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.1em 0.32em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* Fenced ``` blocks. Long lines scroll horizontally rather than wrapping,
+     which keeps pasted code readable instead of reflowing it into prose. */
+  pre.code-block {
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-sm);
+    background-color: var(--medium-gray);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow-x: auto;
+    max-height: 22em;
+    overflow-y: auto;
+  }
+  pre.code-block code {
+    display: block;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    white-space: pre;
+    overflow-wrap: normal;
+    color: var(--text-color);
+    line-height: 1.45;
+  }
+
   .task-description-display, .task-description-editor { margin-top: var(--spacing-sm); line-height: 1.4; }
   .task-description-display { font-size: var(--font-size-sm); color: var(--text-muted); padding: var(--spacing-xs) 0; white-space: pre-wrap; cursor: pointer; }
   .task-description-display:hover { color: var(--text-color); }
+  /* Bounded by max-height rather than -webkit-line-clamp (which subtasks use):
+     a description can contain a fenced <pre> block, and line-clamp only clamps
+     inline content reliably. The fade hints there's more below the cut. */
+  .task-description-display.clamped {
+    max-height: 7.5em;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  }
+  .desc-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--primary-color);
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  .desc-toggle:hover { text-decoration: underline; background-color: transparent; }
+
   .task-description-placeholder { font-style: italic; opacity: 0.7; }
   .task-description-editor textarea { font-size: var(--font-size-sm); min-height: 4em; padding: var(--spacing-xs); }
   .task-description-editor button { font-size: var(--font-size-sm); margin-top: var(--spacing-xs); margin-right: var(--spacing-xs); }
@@ -687,12 +975,36 @@
   }
   .subtask-list, #add-subtask-form { margin-top: var(--spacing-sm); line-height: 1.4; }
   .subtask-list { padding-left: 0; border-left: none; }
-  .subtask-item { display: flex; align-items: center; gap: var(--spacing-sm); padding: 3px 0; font-size: var(--font-size-sm); }
+  /* flex-start, not center: an expanded multi-line subtask would otherwise float
+     its checkbox and handle in the vertical middle of the block. */
+  .subtask-item { display: flex; align-items: flex-start; gap: var(--spacing-sm); padding: 3px 0; font-size: var(--font-size-sm); }
   .subtask-item:hover { background-color: var(--light-gray); }
   .subtask-drag-handle { cursor: move; color: var(--dark-gray); padding: 4px; margin: -4px 0; display: flex; align-items: center; flex-shrink: 0; touch-action: none; }
   .subtask-drag-handle:hover { color: var(--text-color); }
   .subtask-drag-handle-hidden { visibility: hidden; padding: 4px; margin: -4px 0; display: flex; align-items: center; flex-shrink: 0; }
-  .subtask-text { flex-grow: 1; color: var(--text-muted); cursor: pointer; padding: 2px 0; transition: opacity var(--transition-speed) ease; }
+  .subtask-text-wrap { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+  .subtask-text { color: var(--text-muted); cursor: pointer; padding: 2px 0; transition: opacity var(--transition-speed) ease; align-self: stretch; }
+  /* Two-line ceiling so one wordy subtask can't crowd out the rest of the card.
+     -webkit-line-clamp is the only widely-supported way to clamp by line count
+     and works in every current browser despite the vendor prefix. */
+  .subtask-text.clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .subtask-text-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 1px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--primary-color);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .subtask-text-toggle:hover { text-decoration: underline; background-color: transparent; }
   .subtask-item.completed .subtask-text { text-decoration: line-through; opacity: 0.7; }
 
   .delete-subtask-btn { background: none; border: none; color: var(--dark-gray); padding: 2px; display: flex; cursor: pointer; opacity: 0; transition: opacity 0.2s, color 0.2s; margin-left: auto; }
@@ -700,52 +1012,31 @@
   .delete-subtask-btn:hover { color: var(--danger-color); background-color: transparent; }
   #add-subtask-form { display: flex; gap: var(--spacing-xs); }
   #add-subtask-form input { flex-grow: 1; font-size: var(--font-size-sm); padding: var(--spacing-xs); height: auto; }
-  #add-subtask-form button { padding: var(--spacing-xs); font-size: var(--font-size-sm); flex-shrink: 0; }
-  
-  /* --- Completed Task Grouping --- */
-  .date-header-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: var(--spacing-lg);
-    margin-bottom: var(--spacing-xs);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: var(--spacing-xs);
-    position: relative;
+  /* Ghost, not filled: "+ Add Task" is the page's single primary button, and a
+     second filled indigo button inside every expanded card competed with it
+     (worse on mobile, where both spanned full width). */
+  #add-subtask-form button {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
   }
-  .date-header-container.collapsible { cursor: pointer; }
-  .date-header-container.collapsible:hover { background-color: var(--light-gray); }
-  
-  .collapse-toggle-icon {
-      color: var(--text-muted);
-      margin-right: var(--spacing-sm);
-      transition: transform 0.2s ease-in-out;
-      flex-shrink: 0;
-  }
-  .date-header-container.collapsed .collapse-toggle-icon { transform: rotate(-90deg); }
-  
-  .completed-list {
-      /* Clearance on every side, not just left/right - a persistent card
-         shadow (or a focus ring) on the topmost/bottommost item needs room
-         to render before hitting this wrapper's overflow:hidden clip, same
-         as the left/right case. Padding gives the room; the matching
-         negative margin cancels it back out so outer spacing is unchanged. */
-      margin-top: calc(var(--spacing-sm) - 4px);
-      margin-right: -4px;
-      margin-bottom: -4px;
-      margin-left: -4px;
-      padding: 4px;
-      transition: max-height 0.3s ease-out, opacity 0.3s ease-in-out, margin-top 0.3s ease-out;
-      max-height: 1000px;
-      overflow: hidden;
-      opacity: 1;
-  }
-  .completed-list.collapsed {
-      max-height: 0;
-      opacity: 0;
-      margin-top: -4px;
+  #add-subtask-form button:hover {
+    background-color: var(--medium-gray);
+    color: var(--text-color);
+    border-color: var(--dark-gray);
   }
   
+  /* --- Completed Task Grouping ---
+     Per-group collapse was removed (the whole Completed section collapses in
+     one click), so .completed-list no longer needs overflow:hidden for a
+     max-height animation - and without that clip it no longer needs the
+     padding/negative-margin clearance that kept focus rings and card shadows
+     from being trimmed. */
+  .completed-list { margin-top: 0; }
+
   /* --- Placeholders --- */
   .placeholder { font-style: italic; color: var(--text-muted); text-align: center; padding: var(--spacing-md); margin-top: var(--spacing-sm); }
   
@@ -769,11 +1060,13 @@
   .action-btn.action-btn-quiet {
     font-size: var(--font-size-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
-    border-color: transparent;
+    /* A faint rest border rather than none: fully borderless made these read as
+       static labels instead of buttons. Still far quieter than "+ Add Task". */
+    border-color: color-mix(in oklch, var(--border-color) 60%, transparent);
   }
   .action-btn.action-btn-quiet:hover {
     background-color: var(--medium-gray);
-    border-color: transparent;
+    border-color: var(--border-color);
   }
   .action-btn.auto-save-connected {
     color: var(--success-color);
@@ -794,7 +1087,7 @@
   .dragging { opacity: 0.5; background: var(--medium-gray); border: 1px dashed var(--primary-color); }
   .dragging-fallback {
     opacity: 0.95 !important;
-    background: var(--background-color) !important;
+    background: var(--surface-raised) !important;
     box-shadow: var(--shadow-lg);
     border-radius: var(--border-radius);
     cursor: grabbing !important;
@@ -845,13 +1138,22 @@
   @media (max-width: 600px) {
     body { padding: var(--spacing-sm); }
     .app-container { margin: 1rem auto; padding: var(--spacing-md); }
-    h1 { font-size: 1.3rem; }
-    form { flex-direction: column; }
-    form button { align-self: stretch; }
+    /* h1 keeps its clamp() from the type scale - no fixed override here. */
+
+    /* The pinned block (title + add + search) would eat a big share of a phone
+       viewport, so it scrolls normally at this width. */
+    .app-sticky { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+    /* Scoped to the add-task form: #add-subtask-form is also a <form>, and
+       stacking it made its button stretch full-width inside the card. */
+    .app-sticky form { flex-direction: column; }
+    .app-sticky form button { align-self: stretch; }
+
+    /* Row may wrap, but .task-lead keeps handle+checkbox+title together, so the
+       break lands before the badges instead of orphaning the checkbox. */
     .task-main { gap: var(--spacing-xs); flex-wrap: wrap; }
     .task-actions { gap: 0; }
     .task-details-container { padding-left: var(--spacing-sm); }
-    .date-header-container { padding-left: var(--spacing-xs); padding-right: var(--spacing-xs);}
   }
 
   /* --- Theme Toggle View Transition ---
@@ -885,12 +1187,24 @@
     --danger-hover: oklch(80.8% 0.103 19.6);
     --success-color: oklch(80.0% 0.182 151.7);
     --warning-color: oklch(83.7% 0.164 84.4);
-    --light-gray: oklch(26.7% 0.015 256.8);
-    --medium-gray: oklch(33.0% 0.015 252.3);
+    /* Elevation runs light-on-dark here: page (--light-gray) is the darkest
+       surface, the app container (--background-color) sits above it, and task
+       cards (--surface-raised) sit above that. Previously the container was
+       DARKER than the page, so the "raised" card read as a recess - and the
+       shadow tokens are pure black, which is invisible against a dark
+       background, so lightness steps have to do the work instead. */
+    --light-gray: oklch(15.5% 0.012 258.4);
+    --medium-gray: oklch(31.0% 0.015 252.3);
     --dark-gray: oklch(56.3% 0.020 256.3);
     --text-color: oklch(94.3% 0.011 243.7);
-    --text-muted: oklch(67.7% 0.016 254.6);
-    --border-color: oklch(33.0% 0.015 252.3);
-    --background-color: oklch(17.6% 0.014 258.4);
+    --text-muted: oklch(70.0% 0.016 254.6);
+    --border-color: oklch(34.0% 0.015 252.3);
+    --background-color: oklch(20.5% 0.014 258.4);
+    --surface-raised: oklch(24.5% 0.014 258.4);
     --important-border: oklch(83.7% 0.164 84.4);
+    /* Black shadows barely register on dark surfaces - raise the alpha so the
+       elevation cue survives, working alongside the lightness steps above. */
+    --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.30), 0 1px 1px oklch(0% 0 0 / 0.24);
+    --shadow-md: 0 1px 2px oklch(0% 0 0 / 0.32), 0 6px 16px oklch(0% 0 0 / 0.40);
+    --shadow-lg: 0 2px 4px oklch(0% 0 0 / 0.34), 0 16px 32px oklch(0% 0 0 / 0.52);
   }

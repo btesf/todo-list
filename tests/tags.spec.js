@@ -13,7 +13,10 @@ async function addTagViaPill(row, tagName) {
   await row.locator('.tag-input').press('Enter');
 }
 
-test('adding a tag shows a chip both in details and on the collapsed row', async ({ page }) => {
+// The meta-row (expanded) and the compact .tag-chip-strip (collapsed) are two
+// views of the same tags, deliberately never shown at once - rendering both
+// duplicated every chip on screen.
+test('a tag shows in the meta-row while expanded and as a compact chip once collapsed', async ({ page }) => {
   await addTask(page, 'Task with tags');
   const row = taskRow(page, 'Task with tags');
   await openDetails(row);
@@ -21,19 +24,26 @@ test('adding a tag shows a chip both in details and on the collapsed row', async
   await addTagViaPill(row, 'urgent');
 
   await expect(row.locator('.meta-row .tag-chip')).toHaveCount(1);
-  await expect(row.locator('.tag-chip-strip .tag-chip')).toHaveCount(1);
+  await expect(row.locator('.tag-chip-strip .tag-chip')).toHaveCount(0);
+
+  await openDetails(row); // collapse
   await expect(row.locator('.tag-chip-strip .tag-chip')).toHaveText('urgent');
+  // The meta-row stays in the DOM when collapsed (the details wrapper animates
+  // to 0fr and flips to visibility:hidden), so assert it's hidden, not absent.
+  await expect(row.locator('.meta-row .tag-chip')).toBeHidden();
 });
 
-test('removing a tag removes its chip from both places', async ({ page }) => {
+test('removing a tag removes it from both the expanded and collapsed views', async ({ page }) => {
   await addTask(page, 'Task to untag');
   const row = taskRow(page, 'Task to untag');
   await openDetails(row);
   await addTagViaPill(row, 'temp');
-  await expect(row.locator('.tag-chip-strip .tag-chip')).toHaveCount(1);
+  await expect(row.locator('.meta-row .tag-chip')).toHaveCount(1);
 
   await row.locator('.meta-row .tag-chip-remove').click();
   await expect(row.locator('.meta-row .tag-chip')).toHaveCount(0);
+
+  await openDetails(row); // collapse
   await expect(row.locator('.tag-chip-strip .tag-chip')).toHaveCount(0);
 });
 
@@ -43,10 +53,14 @@ test('clicking a tag chip filters the list by that tag', async ({ page }) => {
   const row = taskRow(page, 'Design review');
   await openDetails(row);
   await addTagViaPill(row, 'work');
+  await openDetails(row); // collapse so the compact chip is the one on screen
 
   await row.locator('.tag-chip-strip .tag-chip').click();
 
-  await expect(page.getByPlaceholder('Search tasks...')).toHaveValue('work');
+  // Tag filtering is its own state now, not the text search box - so the search
+  // input stays empty and the active filter shows in the filter bar instead.
+  await expect(page.getByPlaceholder('Search tasks...')).toHaveValue('');
+  await expect(page.locator('.filter-bar')).toContainText('work');
   await expect(taskRow(page, 'Design review')).toBeVisible();
   await expect(taskRow(page, 'Coffee break')).toHaveCount(0);
 });

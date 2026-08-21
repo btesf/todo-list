@@ -148,7 +148,10 @@ test.describe('overdue alerts', () => {
     await page.locator('.overdue-alert-banner').getByRole('button', { name: 'Dismiss' }).click();
 
     await setDue(row, TOMORROW);
-    await expect(page.locator('.due-badge')).not.toHaveClass(/overdue/);
+    // setDue leaves the date editor open, and the collapsed-row .due-badge is
+    // suppressed while a task is expanded - blur to render the populated pill.
+    await row.locator('input[type="date"]').blur();
+    await expect(row.locator('.meta-pill:not(.meta-pill-ghost)')).not.toHaveClass(/overdue/);
     await expect(page.locator('.overdue-alert-banner')).toHaveCount(0);
 
     await setDue(row, YESTERDAY);
