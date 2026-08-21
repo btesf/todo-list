@@ -1006,6 +1006,19 @@
   }
   .subtask-text-toggle:hover { text-decoration: underline; background-color: transparent; }
   .subtask-item.completed .subtask-text { text-decoration: line-through; opacity: 0.7; }
+  /* Right-aligned ledger date on completed subtasks. flex-shrink:0 keeps it from
+     being squeezed; the small top offset lines it up with the first text line
+     (the row is align-items:flex-start for multi-line clamp). */
+  .subtask-completed-date {
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding-top: 3px;
+    margin-left: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
 
   .delete-subtask-btn { background: none; border: none; color: var(--dark-gray); padding: 2px; display: flex; cursor: pointer; opacity: 0; transition: opacity 0.2s, color 0.2s; margin-left: auto; }
   .subtask-item:hover .delete-subtask-btn { opacity: 1; }

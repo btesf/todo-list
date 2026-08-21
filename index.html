@@ -539,6 +539,11 @@
                     class="subtask-text-toggle"
                     :aria-expanded="String(isTextExpanded)">{{ isTextExpanded ? 'less' : 'more' }}</button>
             </span>
+            <!-- Completion date, right-aligned into a ledger column. .subtask-text-wrap
+                 flex-grows, so this and the delete button pack against the right edge.
+                 Shown read-only whenever a subtask is done, including inside a
+                 completed parent task (where there is no delete button). -->
+            <span v-if="subtask.completed && completedOn" class="subtask-completed-date" :title="'Completed ' + completedOn">{{ completedOn }}</span>
             <button v-if="!parentCompleted" @click="emit('delete')" class="delete-subtask-btn" type="button" aria-label="Delete subtask">
                 <i data-feather="x" class="icon-xs"></i>
             </button>

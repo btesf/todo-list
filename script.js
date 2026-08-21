@@ -70,6 +70,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${year}-${month}-${day}`;
     }
 
+    // "Aug 14" for completions in the current year, "Aug 14, 2025" otherwise -
+    // keeps the ledger column tight for recent items while staying unambiguous
+    // for older ones. Takes an ISO string (what completionDate stores).
+    function formatCompletionDate(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (isNaN(d)) return '';
+        const opts = { month: 'short', day: 'numeric' };
+        if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+        return d.toLocaleDateString(undefined, opts);
+    }
+
     function formatShortDate(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr + 'T00:00:00');
@@ -187,8 +199,16 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             const cancelEdit = () => { isEditing.value = false; };
             const toggleComplete = () => {
-                emit('update', { ...props.subtask, completed: !props.subtask.completed });
+                const completed = !props.subtask.completed;
+                // Stamp on completion, clear on un-complete - same semantics as a
+                // task's own completionDate, so re-checking gives a fresh date.
+                emit('update', {
+                    ...props.subtask,
+                    completed,
+                    completionDate: completed ? new Date().toISOString() : null,
+                });
             };
+            const completedOn = computed(() => formatCompletionDate(props.subtask.completionDate));
 
             // Long subtasks are clamped to two lines so one wordy item can't push
             // the rest of the card off screen. The more/less control only appears
@@ -221,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return {
                 isEditing, editText, editInputRef, startEditing, saveEdit, cancelEdit, toggleComplete, linkify, emit,
-                textRef, isTextExpanded, isOverflowing, toggleTextExpanded,
+                textRef, isTextExpanded, isOverflowing, toggleTextExpanded, completedOn,
             };
         }
     };
@@ -246,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!text) return;
                 const incomplete = (props.task.subtasks || []).filter(st => !st.completed);
                 const minOrder = incomplete.reduce((min, st) => Math.min(min, st.order ?? 0), 0);
-                const newSubtask = { id: Date.now().toString(), text, completed: false, order: minOrder - 1 };
+                const newSubtask = { id: Date.now().toString(), text, completed: false, completionDate: null, order: minOrder - 1 };
                 const updatedSubtasks = [...(props.task.subtasks || []), newSubtask];
                 emit('update-subtasks', updatedSubtasks);
                 newSubtaskText.value = '';
