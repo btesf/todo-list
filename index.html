@@ -22,7 +22,15 @@
            banners deliberately sit below, in normal flow. -->
       <div class="app-sticky">
         <div class="app-header">
-            <h1>Docket</h1>
+            <!-- Brand lockup: the mark is the app's own checked checkbox (rounded
+                 indigo square + white check), so the logo and the core interaction
+                 are literally the same shape. aria-hidden - the h1 names the app. -->
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"></path></svg>
+                </span>
+                <h1>Docket</h1>
+            </div>
             <button @click="toggleTheme" class="theme-toggle-btn" type="button" :title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" :aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
                 <svg v-if="theme === 'dark'" class="icon-m" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>

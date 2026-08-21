@@ -105,13 +105,34 @@
     border-bottom: 1px solid var(--border-color);
   }
 
+  /* Left-aligned app-bar lockup (brand on the left, theme toggle floats right).
+     The toggle stays absolutely positioned, so only the brand needs to sit left. */
   .app-header {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     position: relative;
     padding: var(--spacing-sm) 0 var(--spacing-md);
   }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+  /* Same rounded-square + white check as a completed checkbox, on the same
+     --primary-color, so it re-themes in dark mode exactly like the checkboxes. */
+  .brand-mark {
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 7px;
+    background-color: var(--primary-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand-mark svg { width: 0.9rem; height: 0.9rem; }
+  .brand h1 { text-align: left; }
 
   .theme-toggle-btn {
     position: absolute;
