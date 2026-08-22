@@ -925,6 +925,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (autoSaveState.value === 'connected') disconnectAutoSave();
                 else reconnectAutoSave();
             };
+            // Adopt an existing backup file: load its tasks first, THEN keep
+            // auto-saving to that same file. Distinct from connectAutoSave, which
+            // writes the current list out immediately - picking an existing backup
+            // there would overwrite it (with an empty list on first run). Here we
+            // read before writing, so no data is lost.
+            const openExistingBackup = async () => {
+                if (!fileAccessSupported) return;
+                try {
+                    const [handle] = await window.showOpenFilePicker({
+                        mode: 'readwrite',
+                        types: [{ description: 'JSON file', accept: { 'application/json': ['.json'] } }],
+                        multiple: false,
+                    });
+                    const file = await handle.getFile();
+                    const imported = JSON.parse(await file.text());
+                    if (!Array.isArray(imported)) throw new Error('Backup JSON is not an array');
+                    const mapped = imported.map(task => ({
+                        subtasks: [], description: '', dueDate: null, dueTime: null, tags: [], ...task
+                    }));
+                    const previous = tasks.value;
+                    // Connect the handle before assigning tasks, so the reactive
+                    // write that follows lands in this file (a harmless re-save of
+                    // the data we just read, which also confirms write access).
+                    fileHandle = handle;
+                    await setStoredHandle(handle);
+                    autoSaveState.value = 'connected';
+                    dismissAutoSaveBanner();
+                    tasks.value = mapped;
+                    const n = mapped.length;
+                    showToast(`Loaded ${n} task${n === 1 ? '' : 's'} — auto-saving to "${handle.name}"`,
+                        previous.length ? { actionLabel: 'Undo', onAction: () => { tasks.value = previous; } } : {});
+                } catch (e) {
+                    if (e.name === 'AbortError') return;
+                    showToast('Could not open that backup file — it may be invalid JSON.', { variant: 'error' });
+                }
+            };
 
             onMounted(async () => {
                 loadTasks();
@@ -1322,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 addTask, handleNewTaskInput, updateTask, deleteTask, deleteMany, clearCompleted, onOrderUpdate, handleFilterByTag,
                 expandedTaskIds, setTaskExpanded,
                 handleExport, triggerImport, handleImport,
-                fileAccessSupported, autoSaveState, autoSaveLabel, handleAutoSaveClick,
+                fileAccessSupported, autoSaveState, autoSaveLabel, handleAutoSaveClick, openExistingBackup,
                 showAutoSaveBanner, showAutoSaveFooterButton, dismissAutoSaveBanner,
                 overdueAlert, dismissOverdueAlert,
                 showNotifyBanner, enableOverdueNotifications, dismissNotifyBanner,

@@ -28,10 +28,16 @@ async function mockFileSystemAccess(page, { permissionState = 'granted' } = {}) 
       get: getPermission, set: setPermission, configurable: true,
     });
 
-    function makeFakeHandle(name) {
+    function makeFakeHandle(name, fileContents) {
       return {
         name,
         kind: 'file',
+        // Existing-backup adoption reads the file before writing; a plain save
+        // handle has no meaningful contents, so default to an empty array.
+        async getFile() {
+          const text = fileContents != null ? fileContents : '[]';
+          return { async text() { return text; } };
+        },
         async createWritable() {
           return {
             async write(data) { window.__autoSaveWrites.push(data); },
@@ -44,6 +50,10 @@ async function mockFileSystemAccess(page, { permissionState = 'granted' } = {}) 
     }
 
     window.showSaveFilePicker = async () => makeFakeHandle('tasks.json');
+    // Tests seed the backup contents via window.__backupFileContents before
+    // triggering the open picker.
+    window.showOpenFilePicker = async () =>
+      [makeFakeHandle('my-backup.json', window.__backupFileContents)];
 
     // window.indexedDB is an accessor property with a getter but no setter,
     // so a plain assignment silently no-ops - Object.defineProperty is required
@@ -192,4 +202,73 @@ test('shows a reconnect prompt on reload when permission needs to be re-granted'
 
   await page.getByRole('button', { name: 'Reconnect auto-save' }).click();
   await expect(page.getByRole('button', { name: 'Auto-saving' })).toBeVisible();
+});
+
+test('the first-run banner offers an "Open a backup file" action', async ({ page }) => {
+  await mockFileSystemAccess(page);
+  await page.reload();
+  await expect(page.locator('.auto-save-banner').getByRole('button', { name: 'Open a backup file' })).toBeVisible();
+});
+
+test('opening an existing backup loads its tasks and connects auto-save to that file', async ({ page }) => {
+  await mockFileSystemAccess(page);
+  await page.reload();
+
+  // Seed the backup file the picker will "open".
+  await page.evaluate(() => {
+    window.__backupFileContents = JSON.stringify([
+      { id: 'b1', text: 'Restored task one', completed: false, subtasks: [], order: 0 },
+      { id: 'b2', text: 'Restored task two', completed: true, subtasks: [], order: 1 },
+    ]);
+  });
+
+  await page.locator('.auto-save-banner').getByRole('button', { name: 'Open a backup file' }).click();
+
+  // Tasks from the file are now shown, and auto-save is connected to it.
+  await expect(page.locator('.task-item', { hasText: 'Restored task one' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Auto-saving' })).toBeVisible();
+  await expect(page.locator('.auto-save-banner')).toHaveCount(0);
+
+  // Subsequent edits write to the adopted file.
+  await addTask(page, 'Added after restore');
+  await expect.poll(() => page.evaluate(() => window.__autoSaveWrites.length)).toBeGreaterThan(0);
+  const latest = await page.evaluate(() => JSON.parse(window.__autoSaveWrites.at(-1)));
+  expect(latest.some(t => t.text === 'Added after restore')).toBe(true);
+  expect(latest.some(t => t.text === 'Restored task one')).toBe(true);
+});
+
+test('opening a backup does not overwrite it before reading (existing tasks are replaced with Undo)', async ({ page }) => {
+  await mockFileSystemAccess(page);
+  await page.reload();
+  await addTask(page, 'In-app task');
+
+  await page.evaluate(() => {
+    window.__backupFileContents = JSON.stringify([
+      { id: 'b1', text: 'From the backup', completed: false, subtasks: [], order: 0 },
+    ]);
+  });
+  // Dismiss the banner first so we exercise the footer entry point too.
+  await page.locator('.auto-save-banner').getByRole('button', { name: 'Dismiss' }).click();
+  await page.getByRole('button', { name: 'Open backup' }).click();
+
+  // The backup's content replaced the in-app list...
+  await expect(page.locator('.task-item', { hasText: 'From the backup' })).toBeVisible();
+  await expect(page.locator('.task-item', { hasText: 'In-app task' })).toHaveCount(0);
+
+  // ...but an Undo restores what was there before.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.task-item', { hasText: 'In-app task' })).toBeVisible();
+});
+
+test('opening an invalid backup file surfaces an error and does not connect', async ({ page }) => {
+  await mockFileSystemAccess(page);
+  await page.reload();
+
+  await page.evaluate(() => { window.__backupFileContents = 'not valid json {'; });
+  await page.locator('.auto-save-banner').getByRole('button', { name: 'Open a backup file' }).click();
+
+  await expect(page.locator('.toast-error')).toBeVisible();
+  // Still disconnected - the banner remains.
+  await expect(page.locator('.auto-save-banner')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Auto-saving' })).toHaveCount(0);
 });

@@ -101,6 +101,7 @@
             </span>
             <div class="auto-save-banner-actions">
                 <button @click="handleAutoSaveClick" type="button" class="action-btn">Enable auto-save</button>
+                <button @click="openExistingBackup" type="button" class="action-btn action-btn-quiet">Open a backup file</button>
                 <button @click="dismissAutoSaveBanner" type="button" class="task-action-btn" aria-label="Dismiss">
                     <i data-feather="x" class="icon-xs"></i>
                 </button>
@@ -271,6 +272,14 @@
               :title="autoSaveState === 'connected' ? 'Auto-save is on — click to disable' : autoSaveState === 'reconnect-needed' ? 'Auto-save needs permission again' : 'Save changes automatically to a local file'"
             >
               <i data-feather="save" class="icon-xs"></i><span>{{ autoSaveLabel }}</span>
+            </button>
+            <button
+              v-if="showAutoSaveFooterButton && autoSaveState === 'disconnected'"
+              @click="openExistingBackup"
+              class="action-btn action-btn-quiet"
+              title="Load an existing backup file and keep saving to it"
+            >
+              <i data-feather="folder" class="icon-xs"></i><span>Open backup</span>
             </button>
         </div>
 
