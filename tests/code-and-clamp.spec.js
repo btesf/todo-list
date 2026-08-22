@@ -1,16 +1,15 @@
 const { test, expect } = require('@playwright/test');
-const { resetApp, addTask, taskRow, openDetails } = require('./helpers');
+const { resetApp, addTask, taskRow, openDetails, setTaskNote } = require('./helpers');
 
 test.beforeEach(async ({ page }) => {
   await resetApp(page);
 });
 
+// Notes are set through the overlay editor now; the rendered result still shows
+// in the card's .task-description-display.
 async function setDescription(page, taskText, description) {
   const row = taskRow(page, taskText);
-  await openDetails(row);
-  await row.locator('.task-description-display').click();
-  await row.locator('textarea').fill(description);
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, description);
   return row;
 }
 
@@ -70,7 +69,7 @@ test('a fenced block and inline code can coexist in one description', async ({ p
   const row = await setDescription(page, 'Mixed code',
     'Call `init()` first:\n```\ninit();\n```');
 
-  await expect(row.locator('.task-description-display > code')).toHaveText('init()');
+  await expect(row.locator('.task-description-display code').first()).toHaveText('init()');
   await expect(row.locator('pre.code-block code')).toContainText('init();');
 });
 

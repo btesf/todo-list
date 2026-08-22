@@ -692,6 +692,15 @@
   .task-text a:hover, .subtask-text a:hover, .task-description-display a:hover {
     color: var(--primary-hover);
   }
+  /* All rendered links open in the OS browser, so mark them with a small ↗.
+     Added via ::after (not in the anchor's text) so it's a visual cue only and
+     doesn't alter the link's accessible name or break text assertions. The NBSP
+     keeps the glyph from wrapping away from the last word. */
+  .task-text a::after, .subtask-text a::after, .task-description-display a::after {
+    content: "\00a0\2197";
+    font-size: 0.8em;
+    vertical-align: baseline;
+  }
   
   /* --- Task Actions --- */
   .task-actions { display: flex; gap: var(--spacing-xs); flex-shrink: 0; align-items: center; margin-left: auto; }
@@ -814,7 +823,37 @@
   }
 
   .task-description-display, .task-description-editor { margin-top: var(--spacing-sm); line-height: 1.4; }
-  .task-description-display { font-size: var(--font-size-sm); color: var(--text-muted); padding: var(--spacing-xs) 0; white-space: pre-wrap; cursor: pointer; }
+  .task-description-display { font-size: var(--font-size-sm); color: var(--text-muted); padding: var(--spacing-xs) 0; cursor: pointer; }
+  /* Note markdown, scoped to note containers so it never restyles the app's own
+     headings. Sizes are relative to the note body, tightened top margin on the
+     first block so the note doesn't start with a gap. */
+  .task-description-display h1, .task-description-display h2, .task-description-display h3,
+  .task-description-display h4, .task-description-display h5, .task-description-display h6 {
+    color: var(--text-color); font-weight: 600; line-height: 1.3;
+    margin: var(--spacing-md) 0 var(--spacing-xs); text-align: left;
+  }
+  .task-description-display h1 { font-size: 1.3em; }
+  .task-description-display h2 { font-size: 1.15em; }
+  .task-description-display h3 { font-size: 1.05em; }
+  .task-description-display h4, .task-description-display h5, .task-description-display h6 { font-size: 1em; }
+  .task-description-display > :first-child { margin-top: 0; }
+  .task-description-display p { margin: 0 0 var(--spacing-sm); }
+  .task-description-display ul, .task-description-display ol { margin: 0 0 var(--spacing-sm); padding-left: 1.4em; }
+  .task-description-display ul { list-style: disc; }
+  .task-description-display ol { list-style: decimal; }
+  .task-description-display li { margin: 2px 0; }
+  .task-description-display blockquote {
+    margin: 0 0 var(--spacing-sm); padding: 2px 0 2px var(--spacing-sm);
+    border-left: 3px solid var(--border-color); color: var(--text-muted);
+  }
+  .task-description-display hr { border: none; border-top: 1px solid var(--border-color); margin: var(--spacing-md) 0; }
+  .task-description-display > :last-child { margin-bottom: 0; }
+  /* @mentions: a subtle indigo chip so handles stand out at a glance. */
+  .handle {
+    color: var(--primary-color); font-weight: 600;
+    background-color: color-mix(in oklch, var(--primary-color) 12%, transparent);
+    border-radius: 4px; padding: 0 3px;
+  }
   .task-description-display:hover { color: var(--text-color); }
   /* Bounded by max-height rather than -webkit-line-clamp (which subtasks use):
      a description can contain a fenced <pre> block, and line-clamp only clamps
@@ -1044,6 +1083,13 @@
   .delete-subtask-btn { background: none; border: none; color: var(--dark-gray); padding: 2px; display: flex; cursor: pointer; opacity: 0; transition: opacity 0.2s, color 0.2s; margin-left: auto; }
   .subtask-item:hover .delete-subtask-btn { opacity: 1; }
   .delete-subtask-btn:hover { color: var(--danger-color); background-color: transparent; }
+  /* Subtask note icon: the only entry point to a subtask's note (subtasks don't
+     expand). Faint-but-visible when empty (touch-friendly), full on row hover,
+     and always indigo when a note exists so presence is obvious. */
+  .subtask-note-btn { background: none; border: none; padding: 2px; display: flex; cursor: pointer; flex-shrink: 0; color: var(--dark-gray); opacity: 0.5; transition: opacity 0.2s, color 0.2s; align-self: flex-start; margin-top: 2px; }
+  .subtask-item:hover .subtask-note-btn { opacity: 1; }
+  .subtask-note-btn:hover { color: var(--primary-color); background: none; }
+  .subtask-note-btn.has-note { opacity: 1; color: var(--primary-color); }
   #add-subtask-form { display: flex; gap: var(--spacing-xs); }
   #add-subtask-form input { flex-grow: 1; font-size: var(--font-size-sm); padding: var(--spacing-xs); height: auto; }
   /* Ghost, not filled: "+ Add Task" is the page's single primary button, and a
@@ -1117,6 +1163,81 @@
     background-color: color-mix(in srgb, var(--warning-color) 12%, transparent);
   }
   
+  /* --- Notes --- */
+  /* Row indicator: an existing note shows as an indigo file icon in the actions. */
+  .task-action-btn.note-btn.has-note { color: var(--primary-color); }
+  .task-action-btn.note-btn.has-note:hover { color: var(--primary-hover); background-color: var(--medium-gray); }
+  /* Empty-state affordance inside expanded details. */
+  .add-note-btn {
+    background: none; border: none; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: var(--font-size-sm); font-style: italic;
+    color: var(--text-muted);
+    padding: var(--spacing-xs) 0; margin-top: var(--spacing-sm);
+  }
+  .add-note-btn:hover { color: var(--primary-color); background: none; }
+
+  /* Note editor overlay */
+  body.modal-open { overflow: hidden; }
+  .note-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    background: oklch(0% 0 0 / 0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 6vh var(--spacing-lg) var(--spacing-lg);
+    animation: note-fade 0.15s ease;
+  }
+  .note-modal {
+    width: min(640px, 100%);
+    max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    animation: note-pop 0.16s ease;
+  }
+  .note-modal-head {
+    display: flex; align-items: center; gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .note-modal-head .feather-file-text { color: var(--primary-color); flex-shrink: 0; }
+  .note-modal-title { font-weight: 600; font-size: var(--font-size-lg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note-modal-spacer { flex: 1; min-width: var(--spacing-sm); }
+  /* Read/edit mode toggle. Ghost when reading ("Edit"), filled indigo when
+     editing ("Done", the affirmative return-to-formatted action). */
+  .note-modebtn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: none; cursor: pointer; flex-shrink: 0;
+    font-size: var(--font-size-sm); padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--border-color); border-radius: var(--border-radius);
+    color: var(--text-muted);
+  }
+  .note-modebtn:hover { background-color: var(--medium-gray); color: var(--text-color); border-color: var(--dark-gray); }
+  .note-modebtn-done { background-color: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+  .note-modebtn-done:hover { background-color: var(--primary-hover); color: #fff; border-color: var(--primary-hover); }
+  .note-modal-body { padding: var(--spacing-md); overflow-y: auto; flex: 1; }
+  .note-textarea {
+    width: 100%; min-height: 40vh; resize: vertical;
+    font-size: var(--font-size-base); line-height: 1.6;
+    border: 1px solid var(--border-color); border-radius: var(--border-radius);
+    padding: var(--spacing-sm); background: var(--background-color);
+  }
+  /* Read view fills the same height as the editor so toggling doesn't jump, and
+     is click-to-edit (hence pointer + full text colour, overriding the muted
+     .task-description-display it borrows markdown styling from). */
+  .note-preview { min-height: 40vh; color: var(--text-color); font-size: var(--font-size-base); cursor: text; }
+  .note-preview:hover { color: var(--text-color); }
+  .note-preview:empty::before { content: "This note is empty — click to add something."; color: var(--text-muted); font-style: italic; }
+  .note-modal-foot {
+    display: flex; align-items: center; gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+  }
+  .note-saved { font-size: var(--font-size-sm); color: var(--text-muted); }
+  @keyframes note-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes note-pop { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+
   /* --- SortableJS Ghost Class --- */
   .dragging { opacity: 0.5; background: var(--medium-gray); border: 1px dashed var(--primary-color); }
   .dragging-fallback {

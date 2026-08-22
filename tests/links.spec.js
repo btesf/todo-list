@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { resetApp, addTask, taskRow, openDetails } = require('./helpers');
+const { resetApp, addTask, taskRow, openDetails, setTaskNote } = require('./helpers');
 
 test.beforeEach(async ({ page }) => {
   await resetApp(page);
@@ -8,11 +8,7 @@ test.beforeEach(async ({ page }) => {
 test('auto-links a raw URL typed into the description', async ({ page }) => {
   await addTask(page, 'Task with inline link');
   const row = taskRow(page, 'Task with inline link');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill('See https://github.com/example/repo/issues/1');
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, 'See https://github.com/example/repo/issues/1');
 
   const link = row.locator('.task-description-display a');
   await expect(link).toHaveAttribute('href', 'https://github.com/example/repo/issues/1');
@@ -23,11 +19,7 @@ test('auto-links a raw URL typed into the description', async ({ page }) => {
 test('shortens a link with markdown-style [label](url) syntax', async ({ page }) => {
   await addTask(page, 'Task with a Jira ticket');
   const row = taskRow(page, 'Task with a Jira ticket');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill('Tracked in [PROJ-123](https://example.atlassian.net/browse/PROJ-123)');
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, 'Tracked in [PROJ-123](https://example.atlassian.net/browse/PROJ-123)');
 
   const link = row.locator('.task-description-display a');
   await expect(link).toHaveAttribute('href', 'https://example.atlassian.net/browse/PROJ-123');
@@ -37,13 +29,7 @@ test('shortens a link with markdown-style [label](url) syntax', async ({ page })
 test('mixes a shortened link and a bare auto-linked URL in the same description', async ({ page }) => {
   await addTask(page, 'Task with two links');
   const row = taskRow(page, 'Task with two links');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill(
-    'See [the PR](https://github.com/example/repo/pull/9) and also https://example.com/notes'
-  );
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, 'See [the PR](https://github.com/example/repo/pull/9) and also https://example.com/notes');
 
   const links = row.locator('.task-description-display a');
   await expect(links).toHaveCount(2);

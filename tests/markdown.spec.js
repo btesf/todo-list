@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { resetApp, addTask, taskRow, openDetails } = require('./helpers');
+const { resetApp, addTask, taskRow, openDetails, setTaskNote } = require('./helpers');
 
 test.beforeEach(async ({ page }) => {
   await resetApp(page);
@@ -16,11 +16,7 @@ test('renders bold, italic, and code in task text', async ({ page }) => {
 test('renders bold, italic, and code in the description', async ({ page }) => {
   await addTask(page, 'Task with formatted description');
   const row = taskRow(page, 'Task with formatted description');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill('Some **bold** and *italic* and `code()` text');
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, 'Some **bold** and *italic* and `code()` text');
 
   const display = row.locator('.task-description-display');
   await expect(display.locator('strong')).toHaveText('bold');
@@ -31,11 +27,7 @@ test('renders bold, italic, and code in the description', async ({ page }) => {
 test('code spans protect their contents from bold/italic markers', async ({ page }) => {
   await addTask(page, 'Task with a tricky code span');
   const row = taskRow(page, 'Task with a tricky code span');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill('Multiplication in code: `a * b` should not become italic');
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, 'Multiplication in code: `a * b` should not become italic');
 
   const display = row.locator('.task-description-display');
   await expect(display.locator('code')).toHaveText('a * b');
@@ -45,15 +37,66 @@ test('code spans protect their contents from bold/italic markers', async ({ page
 test('markdown and links can be combined in the same description', async ({ page }) => {
   await addTask(page, 'Task mixing markdown and a link');
   const row = taskRow(page, 'Task mixing markdown and a link');
-  await openDetails(row);
-
-  await row.locator('.task-description-placeholder').click();
-  await row.locator('textarea').fill('**Important**: see [the ticket](https://example.com/T-1)');
-  await row.getByRole('button', { name: 'Save' }).click();
+  await setTaskNote(page, row, '**Important**: see [the ticket](https://example.com/T-1)');
 
   const display = row.locator('.task-description-display');
   await expect(display.locator('strong')).toHaveText('Important');
   const link = display.locator('a');
   await expect(link).toHaveText('the ticket');
   await expect(link).toHaveAttribute('href', 'https://example.com/T-1');
+});
+
+test('headings render as real heading elements in a note', async ({ page }) => {
+  await addTask(page, 'Noted with headings');
+  const row = taskRow(page, 'Noted with headings');
+  await setTaskNote(page, row, '# Plan\nSome intro.\n## Steps\nDetails here.');
+
+  const display = row.locator('.task-description-display');
+  await expect(display.locator('h1')).toHaveText('Plan');
+  await expect(display.locator('h2')).toHaveText('Steps');
+  await expect(display.locator('p').first()).toHaveText('Some intro.');
+});
+
+test('bullet and numbered lists render as ul/ol with items', async ({ page }) => {
+  await addTask(page, 'Noted with lists');
+  const row = taskRow(page, 'Noted with lists');
+  await setTaskNote(page, row, 'Groceries:\n- Milk\n- Bread\n\nSteps:\n1. Boil\n2. Stir');
+
+  const display = row.locator('.task-description-display');
+  await expect(display.locator('ul li')).toHaveText(['Milk', 'Bread']);
+  await expect(display.locator('ol li')).toHaveText(['Boil', 'Stir']);
+});
+
+test('blockquotes and horizontal rules render as their elements', async ({ page }) => {
+  await addTask(page, 'Noted with quote and rule');
+  const row = taskRow(page, 'Noted with quote and rule');
+  await setTaskNote(page, row, '> Remember this\n\n---\n\nAfter the rule.');
+
+  const display = row.locator('.task-description-display');
+  await expect(display.locator('blockquote')).toContainText('Remember this');
+  await expect(display.locator('hr')).toHaveCount(1);
+});
+
+test('an @handle is highlighted as a mention in a note', async ({ page }) => {
+  await addTask(page, 'Noted with a mention');
+  const row = taskRow(page, 'Noted with a mention');
+  await setTaskNote(page, row, 'Ask @alice about the rollout.');
+
+  const handle = row.locator('.task-description-display .handle');
+  await expect(handle).toHaveText('@alice');
+});
+
+test('an @handle is highlighted in the task title too', async ({ page }) => {
+  await addTask(page, 'Ping @bob for review');
+  await expect(page.locator('.task-text .handle')).toHaveText('@bob');
+});
+
+test('an email address is not mistaken for a mention', async ({ page }) => {
+  await addTask(page, 'Noted with an email');
+  const row = taskRow(page, 'Noted with an email');
+  await setTaskNote(page, row, 'Contact person@example.com for access.');
+
+  // No leading word boundary before the @, so the local-part @ must not become
+  // a mention; the address should linkify as a whole instead of splitting.
+  await expect(row.locator('.task-description-display .handle')).toHaveCount(0);
 });

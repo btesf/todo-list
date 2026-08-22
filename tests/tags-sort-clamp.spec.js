@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { resetApp, addTask, taskRow, openDetails } = require('./helpers');
+const { resetApp, addTask, taskRow, openDetails, setTaskNote } = require('./helpers');
 
 const STORAGE_KEY = 'enhancedTodoAppTasks_vue_v2';
 
@@ -305,12 +305,9 @@ test.describe('description clamp', () => {
   test('a long description is clamped with a Show more toggle', async ({ page }) => {
     await addTask(page, 'Wordy task');
     const row = taskRow(page, 'Wordy task');
-    await openDetails(row);
-    await row.locator('.task-description-display').click();
-    await row.locator('textarea').fill(
+    await setTaskNote(page, row,
       Array.from({ length: 14 }, (_, i) => `Line ${i + 1} of a rather long description that goes on.`).join('\n')
     );
-    await row.getByRole('button', { name: 'Save' }).click();
 
     const desc = row.locator('.task-description-display');
     await expect(desc).toHaveClass(/clamped/);
@@ -330,10 +327,7 @@ test.describe('description clamp', () => {
   test('a short description gets no toggle', async ({ page }) => {
     await addTask(page, 'Terse task');
     const row = taskRow(page, 'Terse task');
-    await openDetails(row);
-    await row.locator('.task-description-display').click();
-    await row.locator('textarea').fill('Just one line.');
-    await row.getByRole('button', { name: 'Save' }).click();
+    await setTaskNote(page, row, 'Just one line.');
 
     await expect(row.locator('.desc-toggle')).toHaveCount(0);
   });

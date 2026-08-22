@@ -22,6 +22,31 @@ async function openDetails(row) {
   await row.getByRole('button', { name: 'Show subtasks, description, and due date' }).click();
 }
 
+// Sets a task's note through the overlay editor (replaces the old inline
+// textarea+Save flow). Expands the task, opens the editor via the "Add note"
+// affordance (present when empty) or the existing note indicator, fills the
+// overlay textarea, and closes with Done - after which the rendered note shows
+// in the card's .task-description-display.
+async function setTaskNote(page, row, text) {
+  await openDetails(row);
+  const addNote = row.getByRole('button', { name: 'Add note' });
+  if (await addNote.count()) {
+    await addNote.click();
+  } else {
+    await row.getByRole('button', { name: 'Open notes' }).click();
+  }
+  const modal = page.locator('.note-modal');
+  // Empty notes open in edit mode; an existing one opens in read mode, so click
+  // Edit to reveal the textarea.
+  if (!(await modal.locator('.note-textarea').count())) {
+    await modal.getByRole('button', { name: 'Edit' }).click();
+  }
+  await modal.locator('.note-textarea').fill(text);
+  // Closing commits the draft; the ✕ carries aria-label "Close notes".
+  await modal.getByRole('button', { name: 'Close notes' }).click();
+  await modal.waitFor({ state: 'detached' });
+}
+
 // SortableJS runs in forceFallback mode (plain pointer-emulated dragging rather
 // than native HTML5 drag-and-drop, for consistent cross-browser behavior). That
 // mode has a small movement tolerance before a drag is recognized, so a single
@@ -44,4 +69,4 @@ async function dragHandle(page, sourceHandle, targetHandle, targetYOffset = -5) 
   await page.mouse.up();
 }
 
-module.exports = { resetApp, addTask, taskRow, completeTask, openDetails, dragHandle };
+module.exports = { resetApp, addTask, taskRow, completeTask, openDetails, dragHandle, setTaskNote };

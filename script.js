@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
+    const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick, provide, inject } = Vue;
 
     // --- SHARED HELPERS ---
 
@@ -13,53 +13,127 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#39;');
     }
 
+    const MD_NUL = String.fromCharCode(0);
+
+    // Inline markdown shared by titles, subtasks, and notes: links, bold, italic,
+    // and @handles. Operates on already-escaped text with code spans/blocks
+    // already swapped out for placeholders, so it never reaches inside them.
+    function applyInline(t) {
+        // Markdown-style [label](url) lets you shorten a link's visible text.
+        t = t.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/g,
+            (m, label, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+        // Auto-link bare URLs, skipping any already inside a tag/attribute.
+        t = t.replace(/(?![^<]*>|[^<>]*<\/a>)\b(https?:\/\/[^\s<]+)/g,
+            (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+        // Bold before italic, so "**" isn't mistaken for a pair of italic markers.
+        t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // @handles: an @ at a word boundary (so email local-parts like name@host
+        // don't match) and not inside a tag we just emitted.
+        t = t.replace(/(^|[\s(])@([a-zA-Z0-9][a-zA-Z0-9._-]*)(?![^<]*>)/g,
+            (m, pre, name) => `${pre}<span class="handle">@${name}</span>`);
+        return t;
+    }
+
+    // Escape + protect fenced/inline code as placeholders. Returns the protected
+    // string plus the arrays needed to restore them.
+    function protectCode(text) {
+        let s = escapeHtml(text);
+        const codeBlocks = [];
+        s = s.replace(/```[a-zA-Z0-9+#._-]*\r?\n?([\s\S]*?)```/g, (m, code) => {
+            codeBlocks.push(code.replace(/\r?\n$/, ''));
+            return `${MD_NUL}BLOCK${codeBlocks.length - 1}${MD_NUL}`;
+        });
+        const codeSpans = [];
+        s = s.replace(/`([^`\n]+)`/g, (m, code) => {
+            codeSpans.push(code);
+            return `${MD_NUL}CODE${codeSpans.length - 1}${MD_NUL}`;
+        });
+        return { s, codeBlocks, codeSpans };
+    }
+    function restoreCode(s, codeBlocks, codeSpans) {
+        s = s.replace(new RegExp(MD_NUL + 'CODE(\\d+)' + MD_NUL, 'g'),
+            (m, i) => `<code>${codeSpans[Number(i)]}</code>`);
+        s = s.replace(new RegExp(MD_NUL + 'BLOCK(\\d+)' + MD_NUL, 'g'),
+            (m, i) => `<pre class="code-block"><code>${codeBlocks[Number(i)]}</code></pre>`);
+        return s;
+    }
+
+    // Inline-only renderer for single-line contexts (task and subtask titles):
+    // no headings/lists/paragraphs, just the inline set above.
     function linkify(text) {
         if (!text) return '';
-        let escaped = escapeHtml(text);
+        const { s, codeBlocks, codeSpans } = protectCode(text);
+        return restoreCode(applyInline(s), codeBlocks, codeSpans);
+    }
 
-        // Placeholders are delimited with NUL because it cannot appear in user
-        // input, so a placeholder can never collide with real text. Built via
-        // String.fromCharCode rather than embedding the raw byte in this file -
-        // the literal byte made script.js register as "binary" to git and diff.
-        const NUL = String.fromCharCode(0);
+    // Full block renderer for notes/descriptions: headings, lists, blockquotes,
+    // horizontal rules, fenced code, and paragraphs - with inline formatting
+    // applied within each block. Line-based; escape-first, whitelist-only output.
+    function renderNote(text) {
+        if (!text) return '';
+        const { s, codeBlocks, codeSpans } = protectCode(text);
+        const lines = s.split('\n');
+        const blockPlaceholder = new RegExp('^' + MD_NUL + 'BLOCK(\\d+)' + MD_NUL + '$');
+        const isSpecial = (lt) =>
+            lt === '' ||
+            /^#{1,6}\s+/.test(lt) ||
+            /^[-*]\s+/.test(lt) ||
+            /^\d+\.\s+/.test(lt) ||
+            /^&gt;\s?/.test(lt) ||
+            /^(-{3,}|\*{3,})$/.test(lt) ||
+            blockPlaceholder.test(lt);
 
-        // Fenced blocks come first, before inline spans: the inline-code pattern
-        // would otherwise chew straight through the ``` fences. An optional
-        // language tag after the opening fence is accepted and ignored.
-        const codeBlocks = [];
-        escaped = escaped.replace(/```[a-zA-Z0-9+#._-]*\r?\n?([\s\S]*?)```/g, (match, code) => {
-            codeBlocks.push(code.replace(/\r?\n$/, ''));
-            return `${NUL}BLOCK${codeBlocks.length - 1}${NUL}`;
-        });
+        const out = [];
+        let i = 0;
+        while (i < lines.length) {
+            const lt = lines[i].trim();
+            if (lt === '') { i++; continue; }
 
-        // Inline code spans are protected next, so none of the patterns below -
-        // bold, italic, or links - ever reach inside them.
-        const codeSpans = [];
-        escaped = escaped.replace(/`([^`\n]+)`/g, (match, code) => {
-            codeSpans.push(code);
-            return `${NUL}CODE${codeSpans.length - 1}${NUL}`;
-        });
+            const bp = lt.match(blockPlaceholder);
+            if (bp) { out.push(`${MD_NUL}BLOCK${bp[1]}${MD_NUL}`); i++; continue; }
 
-        // Markdown-style [label](url) lets you shorten a link's visible text,
-        // e.g. "[PR #42](https://github.com/...)" instead of the raw URL.
-        escaped = escaped.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/g, (match, label, url) => {
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-        });
-        // Auto-link any remaining bare URLs, skipping ones already inside a tag/attribute.
-        escaped = escaped.replace(/(?![^<]*>|[^<>]*<\/a>)\b(https?:\/\/[^\s<]+)/g, (url) =>
-            `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+            if (/^(-{3,}|\*{3,})$/.test(lt)) { out.push('<hr>'); i++; continue; }
 
-        // Bold before italic, so "**" isn't mistaken for a pair of italic markers.
-        escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            const h = lt.match(/^(#{1,6})\s+(.*)$/);
+            if (h) { const n = h[1].length; out.push(`<h${n}>${applyInline(h[2])}</h${n}>`); i++; continue; }
 
-        // Restore protected code: inline spans first, then fenced blocks.
-        escaped = escaped.replace(new RegExp(NUL + 'CODE(\\d+)' + NUL, 'g'),
-            (match, i) => `<code>${codeSpans[Number(i)]}</code>`);
-        escaped = escaped.replace(new RegExp(NUL + 'BLOCK(\\d+)' + NUL, 'g'),
-            (match, i) => `<pre class="code-block"><code>${codeBlocks[Number(i)]}</code></pre>`);
-
-        return escaped;
+            if (/^&gt;\s?/.test(lt)) {
+                const buf = [];
+                while (i < lines.length && /^&gt;\s?/.test(lines[i].trim())) {
+                    buf.push(applyInline(lines[i].trim().replace(/^&gt;\s?/, '')));
+                    i++;
+                }
+                out.push(`<blockquote>${buf.join('<br>')}</blockquote>`);
+                continue;
+            }
+            if (/^[-*]\s+/.test(lt)) {
+                const buf = [];
+                while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^[-*]\s+/, ''))}</li>`);
+                    i++;
+                }
+                out.push(`<ul>${buf.join('')}</ul>`);
+                continue;
+            }
+            if (/^\d+\.\s+/.test(lt)) {
+                const buf = [];
+                while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^\d+\.\s+/, ''))}</li>`);
+                    i++;
+                }
+                out.push(`<ol>${buf.join('')}</ol>`);
+                continue;
+            }
+            // Paragraph: gather consecutive plain lines, join with <br>.
+            const buf = [];
+            while (i < lines.length && !isSpecial(lines[i].trim())) {
+                buf.push(applyInline(lines[i].trim()));
+                i++;
+            }
+            out.push(`<p>${buf.join('<br>')}</p>`);
+        }
+        return restoreCode(out.join(''), codeBlocks, codeSpans);
     }
 
     function toLocalDateKey(date) {
@@ -176,9 +250,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const SubtaskItem = {
         template: '#subtask-item-template',
-        props: ['subtask', 'parentCompleted'],
+        props: ['subtask', 'parentCompleted', 'taskId'],
         emits: ['update', 'delete'],
         setup(props, { emit }) {
+            // Opens the shared note overlay (provided by the root) for this subtask.
+            const noteApi = inject('noteApi', null);
+            const openNote = () => noteApi && noteApi.open({
+                kind: 'subtask', taskId: props.taskId, subtaskId: props.subtask.id, title: props.subtask.text,
+            });
             const isEditing = ref(false);
             const editText = ref('');
             const editInputRef = ref(null);
@@ -241,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return {
                 isEditing, editText, editInputRef, startEditing, saveEdit, cancelEdit, toggleComplete, linkify, emit,
-                textRef, isTextExpanded, isOverflowing, toggleTextExpanded, completedOn,
+                textRef, isTextExpanded, isOverflowing, toggleTextExpanded, completedOn, openNote,
             };
         }
     };
@@ -266,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!text) return;
                 const incomplete = (props.task.subtasks || []).filter(st => !st.completed);
                 const minOrder = incomplete.reduce((min, st) => Math.min(min, st.order ?? 0), 0);
-                const newSubtask = { id: Date.now().toString(), text, completed: false, completionDate: null, order: minOrder - 1 };
+                const newSubtask = { id: Date.now().toString(), text, completed: false, completionDate: null, note: '', order: minOrder - 1 };
                 const updatedSubtasks = [...(props.task.subtasks || []), newSubtask];
                 emit('update-subtasks', updatedSubtasks);
                 newSubtaskText.value = '';
@@ -320,9 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const isEditing = ref(false);
             const editText = ref('');
             const editInputRef = ref(null);
-            const isEditingDescription = ref(false);
-            const descriptionEditText = ref('');
-            const descTextarea = ref(null);
             const newTagText = ref('');
             const isEditingDueDate = ref(false);
             const dueDateInputRef = ref(null);
@@ -384,18 +460,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const handleDelete = () => {
                 emit('delete-task', props.task.id);
             };
-            const startEditingDescription = () => {
-                if (props.task.completed) return;
-                descriptionEditText.value = props.task.description || '';
-                isEditingDescription.value = true;
-                setExpanded(true);
-                nextTick(() => descTextarea.value?.focus());
-            };
-            const saveDescription = () => {
-                emit('update-task', { ...props.task, description: descriptionEditText.value });
-                isEditingDescription.value = false;
-            };
-            const cancelDescription = () => { isEditingDescription.value = false; };
+            // Notes now open in the shared overlay editor (provided by the root)
+            // instead of an inline textarea, so a multi-page note gets real room and
+            // doesn't stretch the card. The task's note is stored in `description`
+            // (kept as the data key to avoid a migration; surfaced as "Notes").
+            const noteApi = inject('noteApi', null);
+            const openTaskNote = () => noteApi && noteApi.open({
+                kind: 'task', taskId: props.task.id, title: props.task.text,
+            });
             const handleSubtasksUpdate = (updatedSubtasks) => {
                 emit('update-task', { ...props.task, subtasks: updatedSubtasks });
             };
@@ -453,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isOverdue = computed(() => isTaskOverdue(props.task));
             const formattedDueDate = computed(() => formatShortDate(props.task.dueDate));
             const formattedDueTime = computed(() => formatTime(props.task.dueTime));
-            const linkifiedDescription = computed(() => linkify(props.task.description).replace(/\n/g, '<br>'));
+            const linkifiedDescription = computed(() => renderNote(props.task.description));
 
             // Descriptions are bounded by max-height rather than -webkit-line-clamp
             // (which subtasks use): a description can contain block children - a
@@ -492,9 +564,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             return {
-                isEditing, editText, editInputRef, isEditingDescription, descriptionEditText, descTextarea,
+                isEditing, editText, editInputRef,
                 toggleDetails, startEditing, saveEdit, cancelEdit, toggleComplete, handleCheckboxChange, toggleImportance,
-                handleDelete, linkify, startEditingDescription, saveDescription, cancelDescription, handleSubtasksUpdate,
+                handleDelete, linkify, openTaskNote, handleSubtasksUpdate,
                 setDueDate, setDueTime, isOverdue, formattedDueDate, formattedDueTime, linkifiedDescription,
                 subtaskProgress, subtaskProgressRingOffset,
                 newTagText, addTag, removeTag, filterByTag,
@@ -1101,6 +1173,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 tasks.value[index] = { ...existing, ...updatedTask };
             };
+
+            // --- Note editor overlay ---
+            // A single root-level modal edits the note for whichever task/subtask
+            // asked to open it (via the provided noteApi). Long notes get room the
+            // inline textarea couldn't give; one editor serves both kinds.
+            const noteEditor = ref(null);   // { kind:'task'|'subtask', taskId, subtaskId?, title }
+            const noteDraft = ref('');
+            // Read-first: the overlay opens showing the rendered note (you mostly
+            // read notes), and Edit drops into the textarea. noteEditing=false means
+            // the formatted read view.
+            const noteEditing = ref(false);
+            const notePreviewHtml = computed(() => renderNote(noteDraft.value));
+            const startEditingNote = () => { noteEditing.value = true; nextTick(() => feather.replace()); };
+            const finishEditingNote = () => { commitNote(); noteEditing.value = false; nextTick(() => feather.replace()); };
+            let noteReturnFocus = null;
+            let noteSaveTimer = null;
+
+            const currentNoteText = () => {
+                if (!noteEditor.value) return '';
+                const task = tasks.value.find(t => t.id === noteEditor.value.taskId);
+                if (!task) return '';
+                if (noteEditor.value.kind === 'task') return task.description || '';
+                const st = (task.subtasks || []).find(s => s.id === noteEditor.value.subtaskId);
+                return (st && st.note) || '';
+            };
+            const commitNote = () => {
+                if (!noteEditor.value) return;
+                const { kind, taskId, subtaskId } = noteEditor.value;
+                const task = tasks.value.find(t => t.id === taskId);
+                if (!task) return;
+                if (kind === 'task') {
+                    if ((task.description || '') !== noteDraft.value) updateTask({ id: taskId, description: noteDraft.value });
+                } else {
+                    const subtasks = (task.subtasks || []).map(s =>
+                        s.id === subtaskId ? { ...s, note: noteDraft.value } : s);
+                    updateTask({ id: taskId, subtasks });
+                }
+            };
+            const onNoteInput = () => {
+                // Debounced autosave: commit ~0.5s after typing stops rather than on
+                // every keystroke (each commit runs the deep tasks watcher).
+                clearTimeout(noteSaveTimer);
+                noteSaveTimer = setTimeout(commitNote, 500);
+            };
+            // Keep focus within the modal (best-practice focus trap) and close on Esc.
+            const onNoteKeydown = (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); closeNoteEditor(); return; }
+                if (e.key !== 'Tab') return;
+                const modal = document.querySelector('.note-modal');
+                if (!modal) return;
+                const f = [...modal.querySelectorAll('button, textarea, [href], input, [tabindex]:not([tabindex="-1"])')]
+                    .filter(el => !el.disabled && el.offsetParent !== null);
+                if (f.length === 0) return;
+                const first = f[0], last = f[f.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            };
+            const openNoteEditor = (target) => {
+                noteReturnFocus = document.activeElement;
+                noteEditor.value = target;
+                noteDraft.value = currentNoteText();
+                // Empty notes have nothing to read, so open straight in edit mode.
+                noteEditing.value = currentNoteText() === '';
+                document.body.classList.add('modal-open');
+                document.addEventListener('keydown', onNoteKeydown);
+                nextTick(() => feather.replace());
+            };
+            const closeNoteEditor = () => {
+                clearTimeout(noteSaveTimer);
+                commitNote();
+                noteEditor.value = null;
+                document.body.classList.remove('modal-open');
+                document.removeEventListener('keydown', onNoteKeydown);
+                // Restore focus to whatever opened the editor (keyboard users).
+                if (noteReturnFocus && noteReturnFocus.focus) noteReturnFocus.focus();
+                noteReturnFocus = null;
+            };
+            provide('noteApi', { open: openNoteEditor });
+
             const deleteTask = (taskId) => {
                 const removed = tasks.value.find(t => t.id === taskId);
                 if (!removed) return;
@@ -1179,7 +1330,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 overdueFirst, toggleOverdueFirst, overdueCount,
                 isTagPanelOpen, toggleTagPanel, allTags, deleteTag,
                 activeTagFilters, toggleTagFilter, clearTagFilters,
-                renamingTag, renameText, startRenameTag, commitRenameTag, cancelRenameTag
+                renamingTag, renameText, startRenameTag, commitRenameTag, cancelRenameTag,
+                noteEditor, noteDraft, noteEditing, notePreviewHtml, onNoteInput, closeNoteEditor,
+                startEditingNote, finishEditingNote
             };
         }
     })
