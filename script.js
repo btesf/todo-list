@@ -15,10 +15,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const MD_NUL = String.fromCharCode(0);
 
+    // Curated shortcode → emoji map for the ":code:" syntax in notes. Kept compact
+    // (common productivity/status/object set) rather than the full Unicode list.
+    // Aliases point at the same glyph (e.g. thumbsup / +1). Unknown codes are left
+    // as-is, so a stray ":foo:" is harmless plain text.
+    const EMOJI_MAP = {
+        white_check_mark: '✅', check: '✔️', heavy_check_mark: '✔️', x: '❌', cross: '❌',
+        warning: '⚠️', no_entry: '⛔', question: '❓', exclamation: '❗', bangbang: '‼️',
+        fire: '🔥', star: '⭐', sparkles: '✨', boom: '💥', zap: '⚡', bell: '🔔',
+        hourglass: '⏳', clock: '🕐', alarm_clock: '⏰', calendar: '📅', date: '📆',
+        arrow_up: '⬆️', arrow_down: '⬇️', arrow_right: '➡️', arrow_left: '⬅️',
+        up: '🔼', top: '🔝', new: '🆕', soon: '🔜',
+        thumbsup: '👍', '+1': '👍', thumbsdown: '👎', '-1': '👎', clap: '👏', wave: '👋',
+        pray: '🙏', muscle: '💪', point_right: '👉', ok_hand: '👌', raised_hands: '🙌',
+        eyes: '👀', brain: '🧠',
+        smile: '😄', grin: '😁', joy: '😂', wink: '😉', blush: '😊', thinking: '🤔',
+        neutral_face: '😐', confused: '😕', cry: '😢', sob: '😭', angry: '😠', rage: '😡',
+        sunglasses: '😎', sweat_smile: '😅', partying: '🥳', exploding_head: '🤯',
+        rocket: '🚀', tada: '🎉', party: '🎉', bulb: '💡', idea: '💡', memo: '📝',
+        pencil: '✏️', pushpin: '📌', paperclip: '📎', link: '🔗', bookmark: '🔖',
+        book: '📖', books: '📚', clipboard: '📋', file: '📄', folder: '📁',
+        chart: '📊', chart_up: '📈', chart_down: '📉', moneybag: '💰', dollar: '💵',
+        email: '📧', mailbox: '📬', phone: '📱', computer: '💻', keyboard: '⌨️',
+        bug: '🐛', wrench: '🔧', hammer: '🔨', gear: '⚙️', lock: '🔒', unlock: '🔓',
+        key: '🔑', flag: '🚩', target: '🎯', dart: '🎯', trophy: '🏆', medal: '🏅',
+        gift: '🎁', package: '📦', label: '🏷️',
+        coffee: '☕', tea: '🍵', beer: '🍺', pizza: '🍕', cake: '🎂', hamburger: '🍔',
+        heart: '❤️', orange_heart: '🧡', yellow_heart: '💛', green_heart: '💚',
+        blue_heart: '💙', purple_heart: '💜', broken_heart: '💔', hundred: '💯',
+        checkered_flag: '🏁', sos: '🆘', recycle: '♻️',
+        sun: '☀️', cloud: '☁️', rainbow: '🌈', snowflake: '❄️', droplet: '💧',
+        seedling: '🌱', tree: '🌳', earth: '🌍', house: '🏠', office: '🏢',
+        car: '🚗', airplane: '✈️', train: '🚆', bike: '🚲', run: '🏃',
+        dog: '🐶', cat: '🐱', unicorn: '🦄', turtle: '🐢', bee: '🐝',
+        ghost: '👻', robot: '🤖', alien: '👽', skull: '💀', poop: '💩',
+        pill: '💊', battery: '🔋',
+    };
+
     // Inline markdown shared by titles, subtasks, and notes: links, bold, italic,
     // and @handles. Operates on already-escaped text with code spans/blocks
     // already swapped out for placeholders, so it never reaches inside them.
-    function applyInline(t) {
+    // opts.emoji enables ":code:" → emoji substitution (notes only).
+    function applyInline(t, opts) {
+        opts = opts || {};
         // Markdown-style [label](url) lets you shorten a link's visible text.
         t = t.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s()]+)\)/g,
             (m, label, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
@@ -32,6 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // don't match) and not inside a tag we just emitted.
         t = t.replace(/(^|[\s(])@([a-zA-Z0-9][a-zA-Z0-9._-]*)(?![^<]*>)/g,
             (m, pre, name) => `${pre}<span class="handle">@${name}</span>`);
+        // :shortcode: → emoji. Runs last, and the (?![^<]*>) guard keeps it out of
+        // any tag/attribute we just emitted (e.g. a URL that contains a colon).
+        // Unknown codes are returned unchanged.
+        if (opts.emoji) {
+            t = t.replace(/:([a-z0-9_+-]+):(?![^<]*>)/gi,
+                (m, code) => EMOJI_MAP[code.toLowerCase()] || m);
+        }
         return t;
     }
 
@@ -60,11 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Inline-only renderer for single-line contexts (task and subtask titles):
-    // no headings/lists/paragraphs, just the inline set above.
+    // no headings/lists/paragraphs, just the inline set above. Emoji shortcodes
+    // are enabled here too, so ":rocket:" renders in titles as it does in notes.
     function linkify(text) {
         if (!text) return '';
         const { s, codeBlocks, codeSpans } = protectCode(text);
-        return restoreCode(applyInline(s), codeBlocks, codeSpans);
+        return restoreCode(applyInline(s, { emoji: true }), codeBlocks, codeSpans);
     }
 
     // Full block renderer for notes/descriptions: headings, lists, blockquotes,
@@ -96,12 +143,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (/^(-{3,}|\*{3,})$/.test(lt)) { out.push('<hr>'); i++; continue; }
 
             const h = lt.match(/^(#{1,6})\s+(.*)$/);
-            if (h) { const n = h[1].length; out.push(`<h${n}>${applyInline(h[2])}</h${n}>`); i++; continue; }
+            if (h) { const n = h[1].length; out.push(`<h${n}>${applyInline(h[2], { emoji: true })}</h${n}>`); i++; continue; }
 
             if (/^&gt;\s?/.test(lt)) {
                 const buf = [];
                 while (i < lines.length && /^&gt;\s?/.test(lines[i].trim())) {
-                    buf.push(applyInline(lines[i].trim().replace(/^&gt;\s?/, '')));
+                    buf.push(applyInline(lines[i].trim().replace(/^&gt;\s?/, ''), { emoji: true }));
                     i++;
                 }
                 out.push(`<blockquote>${buf.join('<br>')}</blockquote>`);
@@ -110,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (/^[-*]\s+/.test(lt)) {
                 const buf = [];
                 while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
-                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^[-*]\s+/, ''))}</li>`);
+                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^[-*]\s+/, ''), { emoji: true })}</li>`);
                     i++;
                 }
                 out.push(`<ul>${buf.join('')}</ul>`);
@@ -119,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (/^\d+\.\s+/.test(lt)) {
                 const buf = [];
                 while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
-                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^\d+\.\s+/, ''))}</li>`);
+                    buf.push(`<li>${applyInline(lines[i].trim().replace(/^\d+\.\s+/, ''), { emoji: true })}</li>`);
                     i++;
                 }
                 out.push(`<ol>${buf.join('')}</ol>`);
@@ -128,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Paragraph: gather consecutive plain lines, join with <br>.
             const buf = [];
             while (i < lines.length && !isSpecial(lines[i].trim())) {
-                buf.push(applyInline(lines[i].trim()));
+                buf.push(applyInline(lines[i].trim(), { emoji: true }));
                 i++;
             }
             out.push(`<p>${buf.join('<br>')}</p>`);

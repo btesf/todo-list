@@ -100,3 +100,55 @@ test('an email address is not mistaken for a mention', async ({ page }) => {
   // a mention; the address should linkify as a whole instead of splitting.
   await expect(row.locator('.task-description-display .handle')).toHaveCount(0);
 });
+
+test(':shortcode: renders as an emoji in a note', async ({ page }) => {
+  await addTask(page, 'Noted with emoji codes');
+  const row = taskRow(page, 'Noted with emoji codes');
+  await setTaskNote(page, row, 'Ship it :rocket: and celebrate :tada:');
+
+  const display = row.locator('.task-description-display');
+  await expect(display).toContainText('Ship it 🚀 and celebrate 🎉');
+  // The literal codes are gone.
+  await expect(display).not.toContainText(':rocket:');
+});
+
+test('an unknown :shortcode: is left untouched', async ({ page }) => {
+  await addTask(page, 'Noted with unknown code');
+  const row = taskRow(page, 'Noted with unknown code');
+  await setTaskNote(page, row, 'Meeting ratio was 3:1 and :notanemoji: stays.');
+
+  const display = row.locator('.task-description-display');
+  await expect(display).toContainText('3:1');
+  await expect(display).toContainText(':notanemoji:');
+});
+
+test('a :shortcode: inside a code span is not converted', async ({ page }) => {
+  await addTask(page, 'Noted with code span');
+  const row = taskRow(page, 'Noted with code span');
+  await setTaskNote(page, row, 'Use the literal `:rocket:` token here.');
+
+  await expect(row.locator('.task-description-display code')).toHaveText(':rocket:');
+});
+
+test(':shortcode: renders as an emoji in a task title', async ({ page }) => {
+  await addTask(page, 'Launch :rocket: now');
+  await expect(page.locator('.task-text')).toContainText('Launch 🚀 now');
+  await expect(page.locator('.task-text')).not.toContainText(':rocket:');
+});
+
+test(':shortcode: renders as an emoji in a subtask title', async ({ page }) => {
+  await addTask(page, 'Parent with emoji subtask');
+  const row = taskRow(page, 'Parent with emoji subtask');
+  await openDetails(row);
+  await row.locator('#add-subtask-form input').fill('Grab :coffee: first');
+  await row.getByRole('button', { name: 'Add', exact: true }).click();
+
+  await expect(row.locator('.subtask-text')).toContainText('Grab ☕ first');
+});
+
+test('an unknown :shortcode: stays literal in a task title', async ({ page }) => {
+  await addTask(page, 'Ship at 3:1 ratio with :notacode: intact');
+  const text = page.locator('.task-text');
+  await expect(text).toContainText('3:1');
+  await expect(text).toContainText(':notacode:');
+});
