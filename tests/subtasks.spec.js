@@ -32,21 +32,42 @@ test('drag-reorders incomplete subtasks, keeps completed ones pinned at the bott
     await addBtn.click();
   }
 
-  // Newest subtask goes to the top of the incomplete group, same as main tasks.
+  // Subtasks append to the bottom (first come, first served) - unlike top-level
+  // tasks, where the newest goes to the top. They read as a sequence of steps.
   let texts = row.locator('.subtask-item .subtask-text');
-  await expect(texts).toHaveText(['Sub C', 'Sub B', 'Sub A']);
+  await expect(texts).toHaveText(['Sub A', 'Sub B', 'Sub C']);
 
   // Complete Sub A - it should sink below the incomplete ones.
   await row.locator('.subtask-item', { hasText: 'Sub A' }).getByRole('checkbox').check();
   texts = row.locator('.subtask-item .subtask-text');
-  await expect(texts).toHaveText(['Sub C', 'Sub B', 'Sub A']);
+  await expect(texts).toHaveText(['Sub B', 'Sub C', 'Sub A']);
 
-  // Drag Sub B above Sub C.
+  // Drag Sub C above Sub B - manual reordering still overrides insertion order.
   const handles = row.locator('.subtask-drag-handle');
-  await dragHandle(page, handles.nth(1), handles.nth(0), -3); // Sub B above Sub C
+  await dragHandle(page, handles.nth(1), handles.nth(0), -3); // Sub C above Sub B
 
   texts = row.locator('.subtask-item .subtask-text');
-  await expect(texts).toHaveText(['Sub B', 'Sub C', 'Sub A']);
+  await expect(texts).toHaveText(['Sub C', 'Sub B', 'Sub A']);
+});
+
+test('a subtask added after others still lands at the bottom', async ({ page }) => {
+  await addTask(page, 'Sequence parent');
+  const row = taskRow(page, 'Sequence parent');
+  await openDetails(row);
+  const subtaskInput = row.getByPlaceholder('Add a subtask...');
+  const addBtn = row.getByRole('button', { name: 'Add', exact: true });
+
+  for (const text of ['First step', 'Second step']) {
+    await subtaskInput.fill(text);
+    await addBtn.click();
+  }
+  await expect(row.locator('.subtask-item .subtask-text')).toHaveText(['First step', 'Second step']);
+
+  // Adding a third appends below the existing two rather than jumping to the top.
+  await subtaskInput.fill('Third step');
+  await addBtn.click();
+  await expect(row.locator('.subtask-item .subtask-text'))
+    .toHaveText(['First step', 'Second step', 'Third step']);
 });
 
 test('expanding a completed task reveals its subtasks via the chevron badge', async ({ page }) => {

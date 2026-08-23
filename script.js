@@ -390,9 +390,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const addSubtask = () => {
                 const text = newSubtaskText.value.trim();
                 if (!text) return;
+                // Subtasks read as a sequence of steps, so new ones append to the
+                // BOTTOM (first come, first served) - unlike top-level tasks, where
+                // the newest goes to the top. Only incomplete subtasks matter here:
+                // completed ones always sort below regardless of their order value.
                 const incomplete = (props.task.subtasks || []).filter(st => !st.completed);
-                const minOrder = incomplete.reduce((min, st) => Math.min(min, st.order ?? 0), 0);
-                const newSubtask = { id: Date.now().toString(), text, completed: false, completionDate: null, note: '', order: minOrder - 1 };
+                const maxOrder = incomplete.reduce((max, st) => Math.max(max, st.order ?? 0), 0);
+                const newSubtask = { id: Date.now().toString(), text, completed: false, completionDate: null, note: '', order: maxOrder + 1 };
                 const updatedSubtasks = [...(props.task.subtasks || []), newSubtask];
                 emit('update-subtasks', updatedSubtasks);
                 newSubtaskText.value = '';
