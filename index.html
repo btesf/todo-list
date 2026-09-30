@@ -349,12 +349,16 @@
                 </div>
                 <div class="activity-modal-body">
                     <div v-if="activityItems.length === 0" class="placeholder">Nothing completed on {{ activityDateLabel }}.</div>
-                    <div v-for="item in activityItems" :key="item.kind + '-' + item.id" class="activity-item">
+                    <div v-for="item in activityItems" :key="item.kind + '-' + item.id" class="activity-item" :class="{ 'activity-item-group-start': item.groupStart }">
                         <i :data-feather="item.kind === 'task' ? 'check-circle' : 'check-square'" class="icon-s activity-item-icon" :class="item.kind"></i>
                         <div class="activity-item-text">
-                            {{ item.text }}
-                            <div v-if="item.kind === 'subtask'" class="activity-item-parent">part of: {{ item.parentText }}</div>
+                            <span v-html="linkify(item.text)"></span>
+                            <div v-if="item.kind === 'subtask'" class="activity-item-parent">part of: <span v-html="linkify(item.parentText)"></span></div>
                         </div>
+                        <button v-if="item.hasNote" @click="openActivityItemNote(item)" type="button" class="activity-note-btn" :aria-label="'Open note for ' + item.text" title="Open note">
+                            <i data-feather="file-text" class="icon-xs"></i>
+                        </button>
+                        <span class="activity-type-pill" :class="item.kind">{{ item.kind === 'task' ? 'Task' : 'Subtask' }}</span>
                     </div>
                 </div>
                 <div class="activity-modal-foot">

@@ -1475,19 +1475,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const activityItems = computed(() => {
                 const dateKey = activityDate.value;
-                const items = [];
+                const flat = [];
                 for (const task of tasks.value) {
                     if (task.completed && task.completionDate && toLocalDateKey(task.completionDate) === dateKey) {
-                        items.push({ kind: 'task', id: task.id, text: task.text, at: task.completionDate });
+                        flat.push({ kind: 'task', id: task.id, taskId: task.id, text: task.text, at: task.completionDate, hasNote: !!task.description });
                     }
                     for (const st of (task.subtasks || [])) {
                         if (st.completed && st.completionDate && toLocalDateKey(st.completionDate) === dateKey) {
-                            items.push({ kind: 'subtask', id: st.id, text: st.text, parentText: task.text, at: st.completionDate });
+                            flat.push({ kind: 'subtask', id: st.id, taskId: task.id, text: st.text, parentText: task.text, at: st.completionDate, hasNote: !!st.note });
                         }
                     }
                 }
-                // Ascending, so the list reads as a timeline of the day.
-                return items.sort((a, b) => new Date(a.at) - new Date(b.at));
+
+                // Group everything completed from the same task together (its own
+                // completion plus any of its subtasks' completions) rather than a
+                // pure chronological interleave - on a busy day, with several tasks'
+                // items completed in between each other, that read as random. Groups
+                // are still ordered by their earliest activity, so the list overall
+                // still reads oldest-to-newest at a glance.
+                const groups = new Map();
+                for (const item of flat) {
+                    if (!groups.has(item.taskId)) groups.set(item.taskId, []);
+                    groups.get(item.taskId).push(item);
+                }
+                const ordered = [...groups.values()].map(group => {
+                    // A task has at most one 'task'-kind entry (it's either completed
+                    // or not) - that one leads the group, subtasks follow by time.
+                    group.sort((a, b) => a.kind === 'task' ? -1 : b.kind === 'task' ? 1 : new Date(a.at) - new Date(b.at));
+                    return group;
+                });
+                ordered.sort((a, b) => Math.min(...a.map(i => new Date(i.at))) - Math.min(...b.map(i => new Date(i.at))));
+
+                const result = [];
+                ordered.forEach((group, groupIndex) => {
+                    group.forEach((item, idx) => {
+                        // Marks the start of every group after the first, so the
+                        // template can draw a divider between one task's cluster
+                        // and the next without one floating above the very first row.
+                        result.push({ ...item, groupStart: idx === 0 && groupIndex > 0 });
+                    });
+                });
+                return result;
             });
 
             const activityDateLabel = computed(() => {
@@ -1523,6 +1551,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const shiftActivityDate = (n) => { activityDate.value = addDaysToDateKey(activityDate.value, n); };
             const setActivityToday = () => { activityDate.value = toLocalDateKey(new Date()); };
             const setActivityDate = (value) => { if (value) activityDate.value = value; };
+
+            // Opens the same Notes overlay used everywhere else in the app (the
+            // root already owns openNoteEditor - no need to go through the
+            // noteApi/inject indirection child components use). Swaps out the
+            // Activity modal rather than stacking a second overlay on top of it.
+            const openActivityItemNote = (item) => {
+                closeActivityLog();
+                if (item.kind === 'task') {
+                    openNoteEditor({ kind: 'task', taskId: item.id, title: item.text });
+                } else {
+                    openNoteEditor({ kind: 'subtask', taskId: item.taskId, subtaskId: item.id, title: item.text });
+                }
+            };
 
             // Plain-text bullet list, ready to paste into a standup/Slack update -
             // the one part of this feature that actually serves "give my team an
@@ -1620,6 +1661,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 addTask, handleNewTaskInput, updateTask, deleteTask, deleteMany, clearCompleted, onOrderUpdate, handleFilterByTag,
                 expandedTaskIds, setTaskExpanded,
                 handleExport, triggerImport, handleImport,
+                linkify,
                 fileAccessSupported, autoSaveState, autoSaveLabel, handleAutoSaveClick, openExistingBackup,
                 showAutoSaveBanner, showAutoSaveFooterButton, dismissAutoSaveBanner,
                 overdueAlert, dismissOverdueAlert,
@@ -1634,7 +1676,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startEditingNote, finishEditingNote,
                 isActivityOpen, activityDate, activityItems, activityDateLabel,
                 openActivityLog, closeActivityLog, shiftActivityDate, setActivityToday, setActivityDate,
-                copyActivitySummary
+                copyActivitySummary, openActivityItemNote
             };
         }
     })

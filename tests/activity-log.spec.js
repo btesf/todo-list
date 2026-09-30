@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { addTask, taskRow, openDetails } = require('./helpers');
+const { addTask, taskRow, openDetails, setTaskNote } = require('./helpers');
 
 // A fixed Tuesday 10:00 - the clock is later advanced 24h to make this
 // "yesterday" relative to the app's own notion of "now".
@@ -181,6 +181,164 @@ test.describe('activity log', () => {
 
     const copied = await page.evaluate(() => window.__clipboard.at(-1));
     expect(copied).toContain('Nothing completed.');
+  });
+
+  test('markdown, emoji shortcodes, links and @mentions render the same as everywhere else', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Ship it :rocket: **today** and tell @sam [the ticket](https://example.com/T-1)');
+    await taskRow(page, 'Ship it').getByRole('checkbox', { name: 'Mark task complete' }).check();
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+
+    await openActivity(page);
+    const item = page.locator('.activity-item', { hasText: 'Ship it' });
+    await expect(item).toContainText('🚀');
+    await expect(item.locator('strong')).toHaveText('today');
+    await expect(item.locator('.handle')).toHaveText('@sam');
+    const link = item.locator('a');
+    await expect(link).toHaveText('the ticket');
+    await expect(link).toHaveAttribute('href', 'https://example.com/T-1');
+    // Raw markdown source should not leak through as literal text.
+    await expect(item).not.toContainText(':rocket:');
+    await expect(item).not.toContainText('**today**');
+  });
+
+  test('the parent task name in "part of" also renders formatting', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Q3 :fire: cleanup');
+    const row = taskRow(page, 'Q3');
+    await openDetails(row);
+    await row.getByPlaceholder('Add a subtask...').fill('Fix the redirect');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    await row.locator('.subtask-item', { hasText: 'Fix the redirect' }).getByRole('checkbox').check();
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+
+    await openActivity(page);
+    const parentLine = page.locator('.activity-item-parent');
+    await expect(parentLine).toContainText('🔥');
+    await expect(parentLine).not.toContainText(':fire:');
+  });
+
+  test('items from the same task stay adjacent even if another task was completed in between', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Follow up on vendor contract');
+    const row = taskRow(page, 'Follow up on vendor contract');
+    await openDetails(row);
+    await row.getByPlaceholder('Add a subtask...').fill('Draft the email');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    await row.locator('.subtask-item', { hasText: 'Draft the email' }).getByRole('checkbox').check();
+
+    // A different task finishes in between - chronologically, this sits
+    // between the vendor contract's two subtask completions.
+    await addTask(page, 'Ship the release');
+    await taskRow(page, 'Ship the release').getByRole('checkbox', { name: 'Mark task complete' }).check();
+
+    await row.getByPlaceholder('Add a subtask...').fill('Call the vendor');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    await row.locator('.subtask-item', { hasText: 'Call the vendor' }).getByRole('checkbox').check();
+
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await openActivity(page);
+
+    const texts = await page.locator('.activity-item .activity-item-text').allTextContents();
+    const draftIdx = texts.findIndex(t => t.includes('Draft the email'));
+    const callIdx = texts.findIndex(t => t.includes('Call the vendor'));
+    // The vendor contract's two subtasks are adjacent, regardless of where
+    // "Ship the release" actually landed chronologically in between them.
+    expect(Math.abs(draftIdx - callIdx)).toBe(1);
+  });
+
+  test('a task completed alongside its own subtasks leads its group', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Q3 auth cleanup');
+    const row = taskRow(page, 'Q3 auth cleanup');
+    await openDetails(row);
+    await row.getByPlaceholder('Add a subtask...').fill('Fix the redirect');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    await row.locator('.subtask-item', { hasText: 'Fix the redirect' }).getByRole('checkbox').check();
+    await row.getByRole('checkbox', { name: 'Mark task complete' }).check();
+
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await openActivity(page);
+
+    const texts = await page.locator('.activity-item .activity-item-text').allTextContents();
+    expect(texts[0]).toContain('Q3 auth cleanup');
+    expect(texts[1]).toContain('Fix the redirect');
+  });
+
+  test('every row carries a Task or Subtask badge', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Ship the release');
+    await taskRow(page, 'Ship the release').getByRole('checkbox', { name: 'Mark task complete' }).check();
+
+    await addTask(page, 'Parent task');
+    const row = taskRow(page, 'Parent task');
+    await openDetails(row);
+    await row.getByPlaceholder('Add a subtask...').fill('A step');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    await row.locator('.subtask-item', { hasText: 'A step' }).getByRole('checkbox').check();
+
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await openActivity(page);
+
+    const taskItem = page.locator('.activity-item', { hasText: 'Ship the release' });
+    await expect(taskItem.locator('.activity-type-pill')).toHaveText('Task');
+    const subtaskItem = page.locator('.activity-item', { hasText: 'A step' });
+    await expect(subtaskItem.locator('.activity-type-pill')).toHaveText('Subtask');
+  });
+
+  test('a task with a note shows a note icon; one without does not', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Noted task');
+    const row = taskRow(page, 'Noted task');
+    await setTaskNote(page, row, 'Used the renewal-v2 template.');
+    await taskRow(page, 'Noted task').getByRole('checkbox', { name: 'Mark task complete' }).check();
+
+    await addTask(page, 'Plain task');
+    await taskRow(page, 'Plain task').getByRole('checkbox', { name: 'Mark task complete' }).check();
+
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await openActivity(page);
+
+    await expect(page.locator('.activity-item', { hasText: 'Noted task' }).locator('.activity-note-btn')).toHaveCount(1);
+    await expect(page.locator('.activity-item', { hasText: 'Plain task' }).locator('.activity-note-btn')).toHaveCount(0);
+  });
+
+  test('clicking the note icon closes the activity log and opens the note in read mode', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Noted task');
+    const row = taskRow(page, 'Noted task');
+    await setTaskNote(page, row, 'Sent to procurement for sign-off.');
+    await taskRow(page, 'Noted task').getByRole('checkbox', { name: 'Mark task complete' }).check();
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+
+    await openActivity(page);
+    await page.locator('.activity-item', { hasText: 'Noted task' }).locator('.activity-note-btn').click();
+
+    await expect(page.locator('.activity-modal')).toHaveCount(0);
+    await expect(page.locator('.note-modal')).toBeVisible();
+    await expect(page.locator('.note-modal-title')).toContainText('Noted task');
+    await expect(page.locator('.note-preview')).toContainText('Sent to procurement for sign-off.');
+  });
+
+  test('a subtask note opens correctly too, scoped to the right subtask', async ({ page }) => {
+    await setup(page);
+    await addTask(page, 'Parent task');
+    const row = taskRow(page, 'Parent task');
+    await openDetails(row);
+    await row.getByPlaceholder('Add a subtask...').fill('Step with a note');
+    await row.getByRole('button', { name: 'Add', exact: true }).click();
+    const subtask = row.locator('.subtask-item', { hasText: 'Step with a note' });
+    await subtask.locator('.subtask-note-btn').click();
+    await page.locator('.note-textarea').fill('Details only relevant to this step.');
+    await page.locator('.note-modal').getByRole('button', { name: 'Close notes' }).click();
+    await subtask.getByRole('checkbox').check();
+
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await openActivity(page);
+    await page.locator('.activity-item', { hasText: 'Step with a note' }).locator('.activity-note-btn').click();
+
+    await expect(page.locator('.note-modal-title')).toContainText('Step with a note');
+    await expect(page.locator('.note-preview')).toContainText('Details only relevant to this step.');
   });
 
   test('the item count in the footer matches what is shown', async ({ page }) => {

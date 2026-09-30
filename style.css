@@ -689,19 +689,19 @@
       font-size: var(--font-size-sm);
   }
 
-  .task-text a, .subtask-text a, .task-description-display a {
+  .task-text a, .subtask-text a, .task-description-display a, .activity-item-text a {
     color: var(--primary-color);
     text-decoration: underline;
     cursor: pointer;
   }
-  .task-text a:hover, .subtask-text a:hover, .task-description-display a:hover {
+  .task-text a:hover, .subtask-text a:hover, .task-description-display a:hover, .activity-item-text a:hover {
     color: var(--primary-hover);
   }
   /* All rendered links open in the OS browser, so mark them with a small ↗.
      Added via ::after (not in the anchor's text) so it's a visual cue only and
      doesn't alter the link's accessible name or break text assertions. The NBSP
      keeps the glyph from wrapping away from the last word. */
-  .task-text a::after, .subtask-text a::after, .task-description-display a::after {
+  .task-text a::after, .subtask-text a::after, .task-description-display a::after, .activity-item-text a::after {
     content: "\00a0\2197";
     font-size: 0.8em;
     vertical-align: baseline;
@@ -1418,6 +1418,39 @@
   .activity-item-icon.subtask { color: var(--primary-color); flex-shrink: 0; margin-top: 2px; }
   .activity-item-text { flex: 1; }
   .activity-item-parent { font-size: var(--font-size-sm); color: var(--text-muted); margin-top: 1px; }
+  /* Spacing (not a full rule on every row) is what signals "these are the
+     same task's items" - only drawn between different tasks' clusters. */
+  .activity-item.activity-item-group-start {
+    margin-top: var(--spacing-xs);
+    padding-top: calc(var(--spacing-xs) + 4px);
+    border-top: 1px dashed var(--border-color);
+  }
+  .activity-type-pill {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 2px 8px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .activity-type-pill.task { color: var(--success-color); background-color: color-mix(in oklch, var(--success-color) 16%, transparent); }
+  .activity-type-pill.subtask { color: var(--primary-color); background-color: color-mix(in oklch, var(--primary-color) 12%, transparent); }
+  .activity-note-btn {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    padding: 3px;
+    border-radius: var(--border-radius);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+    margin-top: 1px;
+  }
+  .activity-note-btn:hover { opacity: 1; background-color: var(--medium-gray); }
   .activity-modal-foot {
     display: flex;
     align-items: center;
