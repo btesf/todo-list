@@ -247,6 +247,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return getTaskDueDateTime(task) < new Date();
     }
 
+    // A snoozed task is hidden through the end of its snooze date - same
+    // date-only "through end of day" rule as a due date with no time, so a
+    // task snoozed for "today" reappears tomorrow rather than immediately.
+    function isTaskSnoozed(task) {
+        if (!task.snoozedUntil || task.completed) return false;
+        return new Date(`${task.snoozedUntil}T23:59:59.999`) > new Date();
+    }
+    // "Tomorrow" / "in N days" - deliberately simple (no week-bucketing) so
+    // the wording always matches the exact quick-pick option that produced it.
+    function formatSnoozeRelative(snoozedUntil) {
+        const todayKey = toLocalDateKey(new Date());
+        const diffDays = Math.round((new Date(snoozedUntil + 'T00:00:00') - new Date(todayKey + 'T00:00:00')) / 86400000);
+        if (diffDays <= 0) return 'Today';
+        if (diffDays === 1) return 'Tomorrow';
+        return `in ${diffDays} days`;
+    }
+    function addDaysKey(n) {
+        const d = new Date();
+        d.setDate(d.getDate() + n);
+        return toLocalDateKey(d);
+    }
+    // Always strictly in the future, even if today is Monday.
+    function nextMondayKey() {
+        const d = new Date();
+        const diff = (8 - d.getDay()) % 7 || 7;
+        d.setDate(d.getDate() + diff);
+        return toLocalDateKey(d);
+    }
+
     // Matches the r="7" circle in the #subtask-progress-ring template.
     const PROGRESS_RING_CIRCUMFERENCE = 2 * Math.PI * 7;
 
@@ -455,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dueDateInputRef = ref(null);
             const isAddingTag = ref(false);
             const tagInputRef = ref(null);
+            const isSnoozing = ref(false);
 
             // `expanded` is watched alongside the task data because collapsing a row
             // re-creates elements gated on it (the due badge and its <i data-feather>
@@ -539,6 +569,37 @@ document.addEventListener('DOMContentLoaded', () => {
             // editing group - tabbing from one to the other must not collapse the
             // group, so this checks focus is leaving the group entirely (not just
             // one input) before closing it, rather than using a plain @blur.
+            const toggleSnoozing = () => { isSnoozing.value = !isSnoozing.value; };
+            // Same focus-trap-free auto-close as the due-date editor: only
+            // collapse when focus leaves the whole editor group, not when it
+            // moves between the quick-pick buttons and the date input.
+            const handleSnoozeFocusOut = (event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                    isSnoozing.value = false;
+                }
+            };
+            const snoozeUntilDate = (dateStr) => {
+                emit('update-task', { ...props.task, snoozedUntil: dateStr });
+                // Same reset-on-transition as completing a task (toggleComplete
+                // above) - it's moving to a different list, so it should start
+                // collapsed there regardless of how it was left in Pending.
+                setExpanded(false);
+                isSnoozing.value = false;
+            };
+            const pickSnooze = (kind) => {
+                if (kind === 'tomorrow') snoozeUntilDate(addDaysKey(1));
+                else if (kind === 'nextMonday') snoozeUntilDate(nextMondayKey());
+                else if (kind === 'week') snoozeUntilDate(addDaysKey(7));
+            };
+            const pickSnoozeDate = (value) => {
+                if (value) snoozeUntilDate(value);
+            };
+            const clearSnooze = () => {
+                emit('update-task', { ...props.task, snoozedUntil: null });
+            };
+            const snoozeMinDate = computed(() => toLocalDateKey(new Date()));
+            const snoozeRelative = computed(() => formatSnoozeRelative(props.task.snoozedUntil));
+            const snoozeAbsolute = computed(() => formatShortDate(props.task.snoozedUntil));
             const handleDueEditFocusOut = (event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
                     isEditingDueDate.value = false;
@@ -623,7 +684,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 newTagText, addTag, removeTag, filterByTag,
                 isEditingDueDate, dueDateInputRef, startEditingDueDate, handleDueEditFocusOut,
                 isAddingTag, tagInputRef, startAddingTag, cancelAddingTag, handleTagInputBlur,
-                descRef, isDescExpanded, isDescOverflowing, toggleDescExpanded
+                descRef, isDescExpanded, isDescOverflowing, toggleDescExpanded,
+                isSnoozing, toggleSnoozing, handleSnoozeFocusOut, pickSnooze, pickSnoozeDate,
+                clearSnooze, snoozeMinDate, snoozeRelative, snoozeAbsolute
             };
         }
     };
@@ -723,6 +786,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 emit, groupedTasks, formatDate, isSelecting, selectedIds,
                 toggleSelect, cancelSelecting, deleteSelected, handleClearCompleted
             };
+        }
+    };
+
+    // Deliberately minimal next to CompletedTasks: no bulk-select, no date
+    // grouping - the list is small and sorted by return date, not manually
+    // organized. Needs its own component (not just a <ul> in the root
+    // template) purely so it can locally register 'task-item': TaskItem,
+    // the same reason TaskList and CompletedTasks each do - <task-item> isn't
+    // registered globally.
+    const SnoozedTasks = {
+        template: '#snoozed-tasks-template',
+        components: { 'task-item': TaskItem },
+        props: {
+            tasks: { type: Array, required: true },
+            expandedTaskIds: { type: Set, default: () => new Set() },
+        },
+        emits: ['update-task', 'delete-task', 'filter-by-tag', 'set-task-expanded'],
+        setup(props, { emit }) {
+            return { emit };
         }
     };
 
@@ -862,6 +944,21 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             let overdueCheckInterval = null;
 
+            // Brings a task back from snooze the moment its date has passed -
+            // same trigger points as checkOverdueTasks (mount, 15-min interval,
+            // and the tasks watcher) so a snooze into the past resolves promptly
+            // instead of waiting up to 15 minutes.
+            const checkSnoozedTasks = () => {
+                const dueBack = tasks.value.filter(t => !t.completed && t.snoozedUntil && !isTaskSnoozed(t));
+                if (dueBack.length === 0) return;
+                const dueBackIds = new Set(dueBack.map(t => t.id));
+                tasks.value = tasks.value.map(t => dueBackIds.has(t.id) ? { ...t, snoozedUntil: null } : t);
+                const message = dueBack.length === 1
+                    ? `"${dueBack[0].text}" is back from snooze`
+                    : `${dueBack.length} tasks are back from snooze`;
+                showToast(message);
+            };
+
             const theme = ref(
                 localStorage.getItem('theme') ||
                 (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -993,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const imported = JSON.parse(await file.text());
                     if (!Array.isArray(imported)) throw new Error('Backup JSON is not an array');
                     const mapped = imported.map(task => ({
-                        subtasks: [], description: '', dueDate: null, dueTime: null, tags: [], ...task
+                        subtasks: [], description: '', dueDate: null, dueTime: null, tags: [], snoozedUntil: null, ...task
                     }));
                     const previous = tasks.value;
                     // Connect the handle before assigning tasks, so the reactive
@@ -1030,7 +1127,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 checkOverdueTasks();
-                overdueCheckInterval = setInterval(checkOverdueTasks, 15 * 60 * 1000);
+                checkSnoozedTasks();
+                overdueCheckInterval = setInterval(() => {
+                    checkOverdueTasks();
+                    checkSnoozedTasks();
+                }, 15 * 60 * 1000);
             });
             onUnmounted(() => {
                 if (overdueCheckInterval) clearInterval(overdueCheckInterval);
@@ -1039,6 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveTasks(newTasks);
                 if (autoSaveState.value === 'connected') writeToFile(newTasks);
                 checkOverdueTasks();
+                checkSnoozedTasks();
                 nextTick(() => feather.replace());
             }, { deep: true });
             // Filtering by search mounts/unmounts task-item rows (not just re-renders
@@ -1182,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const pendingTasks = computed(() => {
-                const list = tasks.value.filter(t => !t.completed && matchesFilters(t));
+                const list = tasks.value.filter(t => !t.completed && !isTaskSnoozed(t) && matchesFilters(t));
                 if (!overdueFirst.value) return list.sort((a, b) => a.order - b.order);
                 // Overdue block first, each block still in manual order internally.
                 return list.sort((a, b) =>
@@ -1191,6 +1293,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const overdueCount = computed(() => tasks.value.filter(isTaskOverdue).length);
             const completedTasks = computed(() => tasks.value.filter(t => t.completed && matchesFilters(t)));
+            // Soonest-back-first: this list exists to answer "what's coming up",
+            // not to be manually reordered, so it's never draggable.
+            const snoozedTasks = computed(() =>
+                tasks.value.filter(t => !t.completed && isTaskSnoozed(t) && matchesFilters(t))
+                    .sort((a, b) => a.snoozedUntil.localeCompare(b.snoozedUntil))
+            );
+            // Collapsed by default (opposite of Completed) - the point of snoozing
+            // is to get a task out of the way, so it shouldn't reappear expanded.
+            const SNOOZED_SECTION_COLLAPSED_KEY = 'snoozedSectionCollapsed';
+            const snoozedSectionCollapsed = ref(localStorage.getItem(SNOOZED_SECTION_COLLAPSED_KEY) !== '0');
+            const toggleSnoozedSection = () => {
+                snoozedSectionCollapsed.value = !snoozedSectionCollapsed.value;
+                localStorage.setItem(SNOOZED_SECTION_COLLAPSED_KEY, snoozedSectionCollapsed.value ? '1' : '0');
+            };
 
             // The slash-date shortcuts had no discoverable entry point anywhere in
             // the UI; the empty state is the natural place to teach them.
@@ -1211,6 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             dueDate: null,
                             dueTime: null,
                             tags: [],
+                            snoozedUntil: null,
                             ...task
                         }));
                     } catch (e) {
@@ -1239,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tasks.value.push({
                     id: Date.now().toString(), text, completed: false, completionDate: null,
                     description: "", subtasks: [], isImportant: false, order: minOrder - 1, dueDate: null, dueTime: null, tags: [],
+                    snoozedUntil: null,
                 });
                 newTaskText.value = "";
             };
@@ -1390,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const imported = JSON.parse(e.target.result);
                         if (!Array.isArray(imported)) throw new Error('Imported JSON is not an array');
                         const previous = tasks.value;
-                        tasks.value = imported.map(task => ({ subtasks: [], description: '', dueDate: null, dueTime: null, tags: [], ...task }));
+                        tasks.value = imported.map(task => ({ subtasks: [], description: '', dueDate: null, dueTime: null, tags: [], snoozedUntil: null, ...task }));
                         showToast(`Imported ${tasks.value.length} task${tasks.value.length === 1 ? '' : 's'} (replaced ${previous.length})`, {
                             actionLabel: 'Undo',
                             onAction: () => { tasks.value = previous; },
@@ -1414,6 +1532,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 overdueAlert, dismissOverdueAlert,
                 showNotifyBanner, enableOverdueNotifications, dismissNotifyBanner,
                 completedSectionCollapsed, toggleCompletedSection,
+                snoozedTasks, snoozedSectionCollapsed, toggleSnoozedSection,
                 overdueFirst, toggleOverdueFirst, overdueCount,
                 isTagPanelOpen, toggleTagPanel, allTags, deleteTag,
                 activeTagFilters, toggleTagFilter, clearTagFilters,
@@ -1428,5 +1547,6 @@ document.addEventListener('DOMContentLoaded', () => {
     .directive('focus', { mounted: (el) => el.focus() })
     .component('task-list', TaskList)
     .component('completed-tasks', CompletedTasks)
+    .component('snoozed-tasks', SnoozedTasks)
     .mount('#app');
 });

@@ -222,6 +222,34 @@
             </task-list>
         </div>
 
+        <!-- Snoozed Tasks Section: only shown once something is actually
+             snoozed (same "no permanent dead control" principle as the
+             Overdue-first toggle). Collapsed by default, unlike Completed -
+             the point of snoozing is to get it out of the way. Not draggable:
+             order is soonest-back-first, not manual. -->
+        <div class="task-section" v-if="snoozedTasks.length > 0">
+            <div class="section-header">
+                <h2>
+                    <button type="button" class="section-toggle-btn" :class="{ collapsed: snoozedSectionCollapsed }" @click="toggleSnoozedSection" :aria-expanded="String(!snoozedSectionCollapsed)" aria-controls="snoozed-section-content">
+                        <i data-feather="moon" class="icon-m"></i> Snoozed (<span>{{ snoozedTasks.length }}</span>)
+                        <i data-feather="chevron-down" class="icon-s section-toggle-chevron"></i>
+                    </button>
+                </h2>
+            </div>
+            <div id="snoozed-section-content" class="collapsible-section" :class="{ collapsed: snoozedSectionCollapsed }">
+              <div class="collapsible-section-inner">
+                <snoozed-tasks
+                    :tasks="snoozedTasks"
+                    :expanded-task-ids="expandedTaskIds"
+                    @update-task="updateTask"
+                    @delete-task="deleteTask"
+                    @filter-by-tag="handleFilterByTag"
+                    @set-task-expanded="setTaskExpanded">
+                </snoozed-tasks>
+              </div>
+            </div>
+        </div>
+
         <!-- Completed Tasks Section -->
         <div class="task-section">
             <div class="section-header">
@@ -356,6 +384,22 @@
         </ul>
     </script>
 
+    <!-- SnoozedTasks Template -->
+    <script type="text/x-template" id="snoozed-tasks-template">
+        <ul class="task-list">
+            <task-item
+                v-for="task in tasks"
+                :key="task.id"
+                :task="task"
+                :expanded="expandedTaskIds.has(task.id)"
+                @update-task="emit('update-task', $event)"
+                @delete-task="emit('delete-task', $event)"
+                @filter-by-tag="emit('filter-by-tag', $event)"
+                @set-task-expanded="emit('set-task-expanded', $event)">
+            </task-item>
+        </ul>
+    </script>
+
     <!-- CompletedTasks Template -->
     <script type="text/x-template" id="completed-tasks-template">
         <div id="completed-container">
@@ -441,6 +485,14 @@
                     <i :data-feather="isOverdue ? 'alert-triangle' : 'calendar'" class="icon-xs"></i> {{ formattedDueDate }}<template v-if="formattedDueTime">, {{ formattedDueTime }}</template>
                 </span>
 
+                <span v-if="task.snoozedUntil" class="snooze-badge">
+                    <i data-feather="moon" class="icon-xs"></i>{{ snoozeRelative }}<span class="snooze-badge-abs"> &middot; {{ snoozeAbsolute }}</span>
+                    <span class="snooze-badge-divider"></span>
+                    <button @click="clearSnooze" type="button" class="snooze-badge-go" aria-label="Move back to Pending now" title="Move back to Pending now">
+                        <i data-feather="corner-up-left" class="icon-xs"></i>
+                    </button>
+                </span>
+
                 <button v-if="subtaskProgress" @click="toggleDetails" class="subtask-progress-badge" :class="{ expanded: expanded }" type="button" :title="expanded ? 'Hide subtasks' : 'Show subtasks'">
                     <svg class="progress-ring" viewBox="0 0 18 18" width="14" height="14" aria-hidden="true">
                         <circle class="progress-ring-bg" cx="9" cy="9" r="7"></circle>
@@ -467,6 +519,9 @@
                         <button @click="toggleImportance" class="task-action-btn star-btn" title="Toggle importance" aria-label="Toggle importance">
                             <i data-feather="star" class="icon-s"></i>
                         </button>
+                        <button @click="toggleSnoozing" class="task-action-btn snooze-btn" :class="{ 'has-snooze': task.snoozedUntil }" title="Snooze task" aria-label="Snooze task">
+                            <i data-feather="moon" class="icon-s"></i>
+                        </button>
                         <button @click="toggleDetails" class="task-action-btn add-subtask-btn" title="Subtasks, description, due date" aria-label="Show subtasks, description, and due date">
                             <i data-feather="plus-circle" class="icon-s"></i>
                         </button>
@@ -475,6 +530,14 @@
                         <i data-feather="trash-2" class="icon-s"></i>
                     </button>
                 </div>
+            </div>
+
+            <div v-if="isSnoozing" class="snooze-editor" @focusout="handleSnoozeFocusOut">
+                <span class="snooze-editor-label">Snooze until</span>
+                <button type="button" class="snooze-option" @click="pickSnooze('tomorrow')">Tomorrow</button>
+                <button type="button" class="snooze-option" @click="pickSnooze('nextMonday')">Next Monday</button>
+                <button type="button" class="snooze-option" @click="pickSnooze('week')">In a week</button>
+                <input type="date" class="snooze-date-input" :min="snoozeMinDate" @input="pickSnoozeDate($event.target.value)" aria-label="Pick a snooze date" />
             </div>
 
             <div class="task-details-container">

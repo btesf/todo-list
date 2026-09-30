@@ -588,6 +588,11 @@
      padding-left: calc(var(--spacing-sm) - 3px);
   }
   .task-list li.task-item.important .star-btn { color: var(--warning-color); }
+  /* Full border (not a left-only accent) so it stays inside the app's one
+     card language instead of introducing a second, stripe-only idiom. */
+  .task-list li.task-item.snoozed {
+     border-color: color-mix(in oklch, var(--primary-color) 45%, var(--border-color));
+  }
   
   .task-main { display: flex; align-items: center; gap: var(--spacing-sm); width: 100%; }
   .task-lead {
@@ -718,6 +723,8 @@
   .task-action-btn.delete-btn:hover { background-color: var(--danger-color); color: white; }
   .task-action-btn.star-btn { color: var(--text-muted); }
   .task-action-btn.star-btn:hover { color: var(--warning-color); }
+  .task-action-btn.snooze-btn.has-snooze { color: var(--primary-color); }
+  .task-action-btn.snooze-btn.has-snooze:hover { color: var(--primary-hover); background-color: var(--medium-gray); }
   
   /* --- Drag Handle --- */
   .drag-handle { cursor: move; color: var(--dark-gray); padding: 0 var(--spacing-xs); display: flex; align-items: center; touch-action: none; }
@@ -882,6 +889,68 @@
   .task-description-editor button { font-size: var(--font-size-sm); margin-top: var(--spacing-xs); margin-right: var(--spacing-xs); }
 
   /* --- Due Dates --- */
+  /* --- Snoozing --- */
+  .snooze-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--primary-color);
+    background-color: color-mix(in oklch, var(--primary-color) 12%, transparent);
+    padding: 2px 3px 2px 8px;
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .snooze-badge-abs { font-weight: 400; color: var(--text-muted); }
+  /* A single-glyph "clear due date" X reads fine on its own, but the same X
+     reused here was ambiguous - dismiss, or restore to active? Folding a
+     "send back" arrow into the badge itself (instead of a separate button)
+     keeps the row compact while making the destination obvious from context:
+     it's the one control attached to "in 3 days - Aug 30". */
+  .snooze-badge-divider {
+    width: 1px;
+    height: 14px;
+    background-color: color-mix(in oklch, var(--primary-color) 30%, transparent);
+    flex-shrink: 0;
+  }
+  .snooze-badge-go {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border-radius: 4px;
+    color: var(--primary-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .snooze-badge-go:hover {
+    color: var(--primary-hover);
+    background-color: color-mix(in oklch, var(--primary-color) 20%, transparent);
+  }
+  .snooze-editor {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) 0 var(--spacing-sm);
+  }
+  .snooze-editor-label { font-size: var(--font-size-sm); color: var(--text-muted); margin-right: 2px; }
+  .snooze-option {
+    background-color: var(--medium-gray);
+    color: var(--text-color);
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 3px 9px;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+  .snooze-option:hover { background-color: var(--primary-color); color: white; }
+  .snooze-date-input { width: auto; padding: 2px 4px; font-size: var(--font-size-sm); height: auto; }
+
   .due-badge {
     display: inline-flex;
     align-items: center;
