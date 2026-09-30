@@ -279,6 +279,9 @@
 
         <!-- Data Transfer -->
         <div class="data-transfer">
+            <button @click="openActivityLog" class="action-btn action-btn-quiet" title="See what you completed on a given day">
+              <i data-feather="activity" class="icon-xs"></i><span>Activity</span>
+            </button>
             <button @click="handleExport" class="action-btn action-btn-quiet" title="Export JSON">
               <i data-feather="download" class="icon-xs"></i><span>Export</span>
             </button>
@@ -318,6 +321,49 @@
             <button @click="dismissToast" class="toast-close" type="button" aria-label="Dismiss">
                 <i data-feather="x" class="icon-xs"></i>
             </button>
+        </div>
+
+        <!-- Activity log overlay: same treatment as the Notes editor (dimmed
+             backdrop, Esc closes, focus returns to the opener). Shows what got
+             completed on a given day - both whole tasks and individual subtasks,
+             since a subtask can finish while its parent task is still open. -->
+        <div v-if="isActivityOpen" class="activity-backdrop" @click.self="closeActivityLog">
+            <div class="activity-modal" role="dialog" aria-modal="true" aria-label="Activity log">
+                <div class="activity-modal-head">
+                    <i data-feather="activity" class="icon-s"></i>
+                    <span class="activity-modal-title">Activity</span>
+                    <button @click="closeActivityLog" class="task-action-btn" type="button" aria-label="Close activity log">
+                        <i data-feather="x" class="icon-s"></i>
+                    </button>
+                </div>
+                <div class="activity-date-nav">
+                    <button @click="shiftActivityDate(-1)" type="button" class="task-action-btn" aria-label="Previous day">
+                        <i data-feather="chevron-left" class="icon-s"></i>
+                    </button>
+                    <span class="activity-date-label">{{ activityDateLabel }}</span>
+                    <button @click="shiftActivityDate(1)" type="button" class="task-action-btn" aria-label="Next day">
+                        <i data-feather="chevron-right" class="icon-s"></i>
+                    </button>
+                    <button @click="setActivityToday" type="button" class="activity-today-btn">Today</button>
+                    <input type="date" :value="activityDate" @input="setActivityDate($event.target.value)" class="activity-date-input" aria-label="Pick a date" />
+                </div>
+                <div class="activity-modal-body">
+                    <div v-if="activityItems.length === 0" class="placeholder">Nothing completed on {{ activityDateLabel }}.</div>
+                    <div v-for="item in activityItems" :key="item.kind + '-' + item.id" class="activity-item">
+                        <i :data-feather="item.kind === 'task' ? 'check-circle' : 'check-square'" class="icon-s activity-item-icon" :class="item.kind"></i>
+                        <div class="activity-item-text">
+                            {{ item.text }}
+                            <div v-if="item.kind === 'subtask'" class="activity-item-parent">part of: {{ item.parentText }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="activity-modal-foot">
+                    <span class="activity-foot-hint">{{ activityItems.length }} item{{ activityItems.length === 1 ? '' : 's' }} completed</span>
+                    <button @click="copyActivitySummary" type="button" class="action-btn">
+                        <i data-feather="copy" class="icon-xs"></i> Copy summary
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Note editor overlay: a focused surface for long notes, over the dimmed

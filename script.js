@@ -1457,6 +1457,99 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             provide('noteApi', { open: openNoteEditor });
 
+            // --- Activity log: what got completed on a given day, across BOTH
+            // whole tasks and individual subtasks. A subtask's own completionDate
+            // already exists (from the earlier per-subtask completion-date work)
+            // independent of whether its parent task is done - that's what makes
+            // this possible without any new data model. Purely a lookup view:
+            // nothing here is persisted beyond what tasks/subtasks already carry.
+            const isActivityOpen = ref(false);
+            const activityDate = ref(toLocalDateKey(new Date()));
+            let activityReturnFocus = null;
+
+            function addDaysToDateKey(dateKey, n) {
+                const d = new Date(dateKey + 'T00:00:00');
+                d.setDate(d.getDate() + n);
+                return toLocalDateKey(d);
+            }
+
+            const activityItems = computed(() => {
+                const dateKey = activityDate.value;
+                const items = [];
+                for (const task of tasks.value) {
+                    if (task.completed && task.completionDate && toLocalDateKey(task.completionDate) === dateKey) {
+                        items.push({ kind: 'task', id: task.id, text: task.text, at: task.completionDate });
+                    }
+                    for (const st of (task.subtasks || [])) {
+                        if (st.completed && st.completionDate && toLocalDateKey(st.completionDate) === dateKey) {
+                            items.push({ kind: 'subtask', id: st.id, text: st.text, parentText: task.text, at: st.completionDate });
+                        }
+                    }
+                }
+                // Ascending, so the list reads as a timeline of the day.
+                return items.sort((a, b) => new Date(a.at) - new Date(b.at));
+            });
+
+            const activityDateLabel = computed(() => {
+                const date = new Date(activityDate.value + 'T00:00:00');
+                const today = new Date();
+                const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+                const weekday = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                if (date.toDateString() === today.toDateString()) return `Today · ${weekday}`;
+                if (date.toDateString() === yesterday.toDateString()) return `Yesterday · ${weekday}`;
+                return weekday;
+            });
+
+            const onActivityKeydown = (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); closeActivityLog(); }
+            };
+            // Defaults to yesterday every time it's opened - that's the stated
+            // main use case (status updates for what you did), not "today so far".
+            const openActivityLog = () => {
+                activityReturnFocus = document.activeElement;
+                const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+                activityDate.value = toLocalDateKey(yesterday);
+                isActivityOpen.value = true;
+                document.body.classList.add('modal-open');
+                document.addEventListener('keydown', onActivityKeydown);
+            };
+            const closeActivityLog = () => {
+                isActivityOpen.value = false;
+                document.body.classList.remove('modal-open');
+                document.removeEventListener('keydown', onActivityKeydown);
+                if (activityReturnFocus && activityReturnFocus.focus) activityReturnFocus.focus();
+                activityReturnFocus = null;
+            };
+            const shiftActivityDate = (n) => { activityDate.value = addDaysToDateKey(activityDate.value, n); };
+            const setActivityToday = () => { activityDate.value = toLocalDateKey(new Date()); };
+            const setActivityDate = (value) => { if (value) activityDate.value = value; };
+
+            // Plain-text bullet list, ready to paste into a standup/Slack update -
+            // the one part of this feature that actually serves "give my team an
+            // update" rather than just being a nicer screen to look at.
+            const copyActivitySummary = async () => {
+                const lines = activityItems.value.map(item =>
+                    item.kind === 'task' ? `- ${item.text}` : `- ${item.text} (part of: ${item.parentText})`
+                );
+                const header = `What I did — ${activityDateLabel.value}`;
+                const text = lines.length ? `${header}\n${lines.join('\n')}` : `${header}\nNothing completed.`;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showToast('Copied to clipboard');
+                } catch (e) {
+                    showToast('Could not copy to clipboard.', { variant: 'error' });
+                }
+            };
+
+            // New <i data-feather> icons appear whenever the modal opens or the
+            // viewed date changes (a fresh v-for of activity-item icons) - feather
+            // only scans the DOM on an explicit .replace() call, so without this
+            // they'd render as bare, un-swapped <i> tags (same class of bug as the
+            // due-badge icon fix elsewhere in this file).
+            watch([isActivityOpen, activityItems], () => {
+                if (isActivityOpen.value) nextTick(() => feather.replace());
+            });
+
             const deleteTask = (taskId) => {
                 const removed = tasks.value.find(t => t.id === taskId);
                 if (!removed) return;
@@ -1538,7 +1631,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeTagFilters, toggleTagFilter, clearTagFilters,
                 renamingTag, renameText, startRenameTag, commitRenameTag, cancelRenameTag,
                 noteEditor, noteDraft, noteEditing, notePreviewHtml, onNoteInput, closeNoteEditor,
-                startEditingNote, finishEditingNote
+                startEditingNote, finishEditingNote,
+                isActivityOpen, activityDate, activityItems, activityDateLabel,
+                openActivityLog, closeActivityLog, shiftActivityDate, setActivityToday, setActivityDate,
+                copyActivitySummary
             };
         }
     })
